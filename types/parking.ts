@@ -1,7 +1,8 @@
 export type ParkingSpot = {
     id: string;
     name: string;
-    distance: string;
-    price: string;
-    imageUrl: string;
+    address: string;
+    price_per_hour: number;
+    source: string;
+    distance_meters: number;
 };
