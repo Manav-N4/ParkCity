@@ -1,12 +1,13 @@
-import "@supabase/functions-js/edge-runtime.d.ts";
-import { withSupabase } from "@supabase/server";
-import { encode } from "https://esm.sh/geohash-kit";
-export default {
-  fetch: withSupabase({ auth: ["publishable", "secret"] }, async (req, ctx) => {
-    try {
-      const { lat, lng } = await req.json();
-      const hash = encode(lat, lng, 6);
-      const { data, error } = await ctx.supabaseAdmin
+const express = require('express')
+const router = express.Router()
+const { encode } = require('geohash-kit')
+const supabase = require('../supabase')
+
+router.post('/', async (req, res) => {
+  try {
+    const { lat, lng } = req.body        
+    const hash = encode(lat, lng, 6)
+    const { data, error } = await supabase
         .from("cached_parking_spots")
         .select("cached_spots")
         .eq("geohash", hash)
@@ -16,13 +17,13 @@ export default {
         );
       if (error) throw error;
       if (data && data.length > 0) {
-        return Response.json(data[0].cached_spots);
+        return res.json(data[0].cached_spots);
       } else {
-        const API_KEY = Deno.env.get("GOOGLE_PLACES_API_KEY");
-        const res = await fetch(
+        const API_KEY = process.env.GOOGLE_PLACES_API_KEY;
+        const result = await fetch(
           `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=2000&type=parking&key=${API_KEY}`,
         );
-        const final = await res.json();
+        const final = await result.json();
         console.log(JSON.stringify(final));
         const spots = final.results.map((place) => ({
           google_place_id: place.place_id,
@@ -31,7 +32,7 @@ export default {
           lng: place.geometry.location.lng,
           source: "google_raw",
         }));
-        await ctx.supabaseAdmin
+        await supabase
           .from("cached_parking_spots")
           .upsert({
             geohash: hash,
@@ -39,7 +40,7 @@ export default {
             cached_spots: spots,
             last_fetched_at: new Date().toISOString(),
           });
-        const { error: upsertError } = await ctx.supabaseAdmin
+        const { error: upsertError } = await supabase
           .from("parking_spots")
           .upsert(
             spots.map((spot) => ({
@@ -56,10 +57,11 @@ export default {
             JSON.stringify(upsertError),
           );
         }
-        return Response.json(spots);
-      }
-    } catch (error) {
-      return Response.json({ error: error.message }, { status: 500 });
-    }
-  }),
-};
+        return res.json(spots);
+      }                       
+  } catch (error) {
+    res.status(500).json({ error: error.message })
+  }
+})
+
+module.exports = router
