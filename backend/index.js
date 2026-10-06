@@ -6,6 +6,9 @@ require('dotenv').config()
 const supabase = require('./supabase')
 app.use(express.json());
 
+const autocompleteRouter = require('./routes/autocomplete')
+app.use('/autocomplete', autocompleteRouter)
+
 const searchRouter = require('./routes/search')
 app.use('/search', searchRouter)
 
