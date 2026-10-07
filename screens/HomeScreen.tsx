@@ -19,6 +19,7 @@ import {
 } from '../constants/tokens';
 import { supabase } from '../lib/supabase';
 import { ParkingSpot } from '../types/parking';
+import SearchBar from '../components/SearchBar';
 
 export default function HomeScreen() {
   const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>([]);
@@ -57,11 +58,13 @@ export default function HomeScreen() {
     <View style={styles.container}>
       <Text style={styles.heading}>Where are you going?</Text>
 
-      <TextInput
+      {/* <TextInput
         style={styles.searchInput}
         placeholder="Search a destination"
         placeholderTextColor={colors.textSecondary}
-      />
+      /> */}
+
+      <SearchBar />
 
       <Text style={styles.sectionTitle}>Nearby parking</Text>
 
