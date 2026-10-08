@@ -12,6 +12,9 @@ app.use('/autocomplete', autocompleteRouter)
 const searchRouter = require('./routes/search')
 app.use('/search', searchRouter)
 
+const placeDetailsRouter = require('./routes/place-details')
+app.use('/place-details', placeDetailsRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
