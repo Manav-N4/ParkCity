@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   FlatList,
   Pressable,
@@ -7,73 +7,87 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { colors } from '../constants/tokens';
 
 export type Suggestion = {
-  name: string;
-  latitude: number;
-  longitude: number;
+  google_place_id: string;
+  description: string;
 };
 
 type SearchBarProps = {
-  onSelectSuggestion: (suggestion: Suggestion) => void;
+  onSelectSuggestion: (
+    suggestion: Suggestion,
+    sessionToken: string
+  ) => void;
 };
 
-const suggestions: Suggestion[] = [
-  {
-    name: 'Koramangala',
-    latitude: 12.9352,
-    longitude: 77.6245,
-  },
-  {
-    name: 'Indiranagar',
-    latitude: 12.9784,
-    longitude: 77.6408,
-  },
-  {
-    name: 'HSR Layout',
-    latitude: 12.9116,
-    longitude: 77.6474,
-  },
-  {
-    name: 'Kundalahalli',
-    latitude: 12.9569,
-    longitude: 77.7152,
-  },
-  {
-    name: 'AECS Layout',
-    latitude: 12.9698,
-    longitude: 77.7161,
-  },
-];
+const API_BASE_URL = 'https://parkcity.onrender.com';
 
 export default function SearchBar({
   onSelectSuggestion,
 }: SearchBarProps) {
   const [searchText, setSearchText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [sessionToken, setSessionToken] = useState(
+    () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
+  );
 
-  const filteredSuggestions = useMemo(() => {
-    const query = searchText.trim().toLowerCase();
+  useEffect(() => {
+    const query = searchText.trim();
 
     if (!query) {
-      return [];
+      setSuggestions([]);
+      return;
     }
 
-    return suggestions.filter((suggestion) =>
-      suggestion.name.toLowerCase().includes(query)
-    );
-  }, [searchText]);
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await fetch(`${API_BASE_URL}/autocomplete`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            input: query,
+            sessiontoken: sessionToken,
+          }),
+        });
+
+        if (!response.ok) {
+          throw new Error(
+            `Autocomplete request failed: ${response.status}`
+          );
+        }
+
+        const data: Suggestion[] = await response.json();
+
+        setSuggestions(data);
+      } catch (error) {
+        console.error('Autocomplete error:', error);
+        setSuggestions([]);
+      }
+    }, 300);
+
+    return () => clearTimeout(timeout);
+  }, [searchText, sessionToken]);
 
   const handleSelectSuggestion = (suggestion: Suggestion) => {
-    setSearchText(suggestion.name);
+    setSearchText(suggestion.description);
+    setSuggestions([]);
     setIsFocused(false);
-    onSelectSuggestion(suggestion);
+
+    onSelectSuggestion(suggestion, sessionToken);
+
+    setSessionToken(
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
   };
 
   const showSuggestions =
     isFocused &&
     searchText.trim().length > 0 &&
-    filteredSuggestions.length > 0;
+    suggestions.length > 0;
 
   return (
     <View style={styles.container}>
@@ -86,7 +100,7 @@ export default function SearchBar({
         <TextInput
           style={styles.input}
           placeholder="Search a destination"
-          placeholderTextColor="#888888"
+          placeholderTextColor={colors.textSecondary}
           value={searchText}
           onChangeText={setSearchText}
           onFocus={() => setIsFocused(true)}
@@ -99,10 +113,8 @@ export default function SearchBar({
       {showSuggestions && (
         <View style={styles.dropdown}>
           <FlatList
-            data={filteredSuggestions}
-            keyExtractor={(item) =>
-              `${item.latitude}-${item.longitude}`
-            }
+            data={suggestions}
+            keyExtractor={(item) => item.google_place_id}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
             renderItem={({ item }) => (
@@ -115,11 +127,7 @@ export default function SearchBar({
               >
                 <View style={styles.suggestionContent}>
                   <Text style={styles.suggestionName}>
-                    {item.name}
-                  </Text>
-
-                  <Text style={styles.suggestionLocation}>
-                    Bengaluru
+                    {item.description}
                   </Text>
                 </View>
               </Pressable>
@@ -139,30 +147,30 @@ const styles = StyleSheet.create({
 
   inputContainer: {
     height: 52,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor: '#E2E2E2',
+    borderColor: colors.border,
     borderRadius: 14,
     justifyContent: 'center',
   },
 
   inputContainerFocused: {
-    borderColor: '#111111',
+    borderColor: colors.text,
   },
 
   input: {
     flex: 1,
     paddingHorizontal: 16,
     fontSize: 16,
-    color: '#111111',
+    color: colors.text,
   },
 
   dropdown: {
     marginTop: 8,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: colors.surface,
     borderRadius: 14,
     borderWidth: 1,
-    borderColor: '#E8E8E8',
+    borderColor: colors.border,
     maxHeight: 240,
 
     shadowColor: '#000000',
@@ -179,11 +187,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: colors.border,
   },
 
   suggestionItemPressed: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: colors.background,
   },
 
   suggestionContent: {
@@ -193,11 +201,6 @@ const styles = StyleSheet.create({
   suggestionName: {
     fontSize: 15,
     fontWeight: '600',
-    color: '#111111',
-  },
-
-  suggestionLocation: {
-    fontSize: 13,
-    color: '#777777',
+    color: colors.text,
   },
 });

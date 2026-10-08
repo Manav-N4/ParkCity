@@ -1,70 +1,68 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 
 import ParkingSpotCard from '../components/ParkingSpotCard';
+import SearchBar, { Suggestion } from '../components/SearchBar';
 import {
   colors,
   fontWeight,
-  radius,
-  size,
   spacing,
   typography,
 } from '../constants/tokens';
-import { supabase } from '../lib/supabase';
+import {
+  getPlaceDetails,
+  searchNearbyParking,
+} from '../lib/api';
 import { ParkingSpot } from '../types/parking';
-import SearchBar from '../components/SearchBar';
 
 export default function HomeScreen() {
   const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchNearbyParking = async () => {
-      const rpcParams = {
-        user_lng: 77.6189,
-        user_lat: 12.9341,
-        radius_meters: 2000,
-      };
+  const handleSelectSuggestion = async (
+    suggestion: Suggestion,
+    sessionToken: string
+  ) => {
+    try {
+      setLoading(true);
+      setError(null);
+      setParkingSpots([]);
 
-
-      const { data, error } = await supabase.rpc(
-        'nearby_parking_spots',
-        rpcParams
+      const { lat, lng } = await getPlaceDetails(
+        suggestion.google_place_id,
+        sessionToken
       );
 
-      if (error) {
-        console.log('RPC ERROR:', error);
-        setError(error.message);
-        setLoading(false);
-        return;
-      }
+      const spots = await searchNearbyParking(lat, lng);
 
-      setParkingSpots(data ?? []);
+      setParkingSpots(spots);
+    } catch (error) {
+      console.error('Parking search error:', error);
+
+      setError(
+        error instanceof Error
+          ? error.message
+          : 'Something went wrong while searching for parking.'
+      );
+    } finally {
       setLoading(false);
-    };
-
-    fetchNearbyParking();
-  }, []);
+    }
+  };
 
   return (
     <View style={styles.container}>
       <Text style={styles.heading}>Where are you going?</Text>
 
-      {/* <TextInput
-        style={styles.searchInput}
-        placeholder="Search a destination"
-        placeholderTextColor={colors.textSecondary}
-      /> */}
-
-      <SearchBar />
+      <SearchBar
+        onSelectSuggestion={handleSelectSuggestion}
+      />
 
       <Text style={styles.sectionTitle}>Nearby parking</Text>
 
@@ -78,15 +76,15 @@ export default function HomeScreen() {
       {error && <Text style={styles.error}>{error}</Text>}
 
       {!loading && !error && (
-        <>
-          <FlatList
-            data={parkingSpots}
-            keyExtractor={(item) => item.id}
-            renderItem={({ item }) => <ParkingSpotCard spot={item} />}
-            showsVerticalScrollIndicator={false}
-            contentContainerStyle={styles.listContent}
-          />
-        </>
+        <FlatList
+          data={parkingSpots}
+          keyExtractor={(item) => item.id}
+          renderItem={({ item }) => (
+            <ParkingSpotCard spot={item} />
+          )}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+        />
       )}
     </View>
   );
@@ -108,18 +106,6 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md,
   },
 
-  searchInput: {
-    height: size.inputHeight,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    color: colors.text,
-    fontSize: typography.body,
-    marginBottom: spacing.xl,
-  },
-
   sectionTitle: {
     color: colors.text,
     fontSize: typography.body,
@@ -136,11 +122,5 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: typography.small,
     lineHeight: typography.smallLineHeight,
-  },
-
-  debugText: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginBottom: spacing.md,
   },
 });
