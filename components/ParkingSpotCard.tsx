@@ -1,5 +1,8 @@
-import { StyleSheet, Text, View } from 'react-native';
 
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+
+import { RootStackParamList } from '../App';
 import {
   colors,
   fontWeight,
@@ -11,27 +14,37 @@ import { ParkingSpot } from '../types/parking';
 
 type ParkingSpotCardProps = {
   spot: ParkingSpot;
+  navigation: NativeStackNavigationProp<RootStackParamList, 'Home'>;
 };
 
-export default function ParkingSpotCard({ spot }: ParkingSpotCardProps) {
+export default function ParkingSpotCard({
+  spot,
+  navigation,
+}: ParkingSpotCardProps) {
+  const handlePress = () => {
+    navigation.navigate('ParkingDetails', { spot });
+  };
+
   return (
-    <View style={styles.card}>
+    <Pressable
+      onPress={handlePress}
+      style={({ pressed }) => [
+        styles.card,
+        pressed && styles.cardPressed,
+      ]}
+    >
       <View style={styles.content}>
         <Text style={styles.name}>{spot.name}</Text>
 
-        <Text style={styles.address}>{spot.address}</Text>
-
         <View style={styles.meta}>
-          <Text style={styles.distance}>
-            {Math.round(spot.distance_meters)} m
-          </Text>
-
           <Text style={styles.price}>
-            ₹{spot.price_per_hour}/hr
+            {spot.price_per_hour == null
+              ? 'Price unavailable'
+              : `₹${spot.price_per_hour}/hr`}
           </Text>
         </View>
       </View>
-    </View>
+    </Pressable>
   );
 }
 
@@ -43,11 +56,12 @@ const styles = StyleSheet.create({
     borderColor: colors.border,
     marginBottom: spacing.md,
   },
-
+  cardPressed: {
+    opacity: 0.75,
+  },
   content: {
     padding: spacing.md,
   },
-
   name: {
     color: colors.text,
     fontSize: typography.body,
@@ -55,26 +69,11 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
     marginBottom: spacing.sm,
   },
-
-  address: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    lineHeight: typography.smallLineHeight,
-    marginBottom: spacing.md,
-  },
-
   meta: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
   },
-
-  distance: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    lineHeight: typography.smallLineHeight,
-  },
-
   price: {
     color: colors.text,
     fontSize: typography.small,
