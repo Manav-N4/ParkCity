@@ -1,8 +1,8 @@
 export type ParkingSpot = {
-    id: string;
-    name: string;
-    address: string;
-    price_per_hour: number;
-    source: string;
-    distance_meters: number;
+  google_place_id: string;
+  name: string;
+  lat: number;
+  lng: number;
+  price_per_hour: number | null;
+  source: string;
 };
