@@ -1,0 +1,1 @@
+alter type attribute_source add value if not exists 'owner_pending';
