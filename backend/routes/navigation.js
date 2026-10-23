@@ -4,7 +4,8 @@ const supabase = require('../supabase')
 
 router.post('/', async (req, res) => {
   try {
-    const { spot_id, user_id } = req.body
+    const { spot_id } = req.body
+    const user_id = req.user.id
 
     if (!spot_id) {
       return res.status(400).json({ error: 'spot_id is required' })
@@ -12,7 +13,7 @@ router.post('/', async (req, res) => {
 
     const { error } = await supabase
       .from('navigation_events')
-      .insert({ spot_id, user_id: user_id ?? null })
+      .insert({ spot_id, user_id })
 
     if (error) throw error
 
