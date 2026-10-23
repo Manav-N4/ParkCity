@@ -3,7 +3,7 @@ const app = express();
 
 require('dotenv').config()
 
-const supabase = require('./supabase')
+const requireAuth = require('./middleware/auth')
 app.use(express.json());
 
 const autocompleteRouter = require('./routes/autocomplete')
@@ -16,7 +16,10 @@ const placeDetailsRouter = require('./routes/place-details')
 app.use('/place-details', placeDetailsRouter)
 
 const navigationRouter = require('./routes/navigation')
-app.use('/navigation-log', navigationRouter)
+app.use('/navigation-log', requireAuth, navigationRouter)
+
+const profileRouter = require('./routes/profile')
+app.use('/profile', requireAuth, profileRouter)
 
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
