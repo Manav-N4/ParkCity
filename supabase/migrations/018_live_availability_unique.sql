@@ -1,0 +1,1 @@
+alter table live_availability add constraint live_availability_spot_id_key unique (spot_id);
