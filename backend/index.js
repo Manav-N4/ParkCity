@@ -24,6 +24,9 @@ app.use('/profile', requireAuth, profileRouter)
 const claimRouter = require('./routes/claim')
 app.use('/claim', requireAuth, claimRouter)
 
+const listingRouter = require('./routes/listing')
+app.use('/listing', requireAuth, listingRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
