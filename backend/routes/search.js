@@ -13,13 +13,14 @@ async function mergePrices(spots) {
   if (placeIds.length === 0) {
     return spots.map((spot) => ({
       ...spot,
+      id: spot.id ?? null,
       price_per_hour: spot.price_per_hour ?? null,
     }))
   }
 
   const { data: pricedSpots, error: priceError } = await supabase
     .from('parking_spots')
-    .select('google_place_id, price_per_hour')
+    .select('id, google_place_id, price_per_hour')
     .in('google_place_id', placeIds)
 
   if (priceError) {
@@ -27,25 +28,218 @@ async function mergePrices(spots) {
 
     return spots.map((spot) => ({
       ...spot,
+      id: spot.id ?? null,
       price_per_hour: spot.price_per_hour ?? null,
     }))
   }
 
-  const priceByPlaceId = new Map(
+  const spotByPlaceId = new Map(
     (pricedSpots || []).map((spot) => [
       spot.google_place_id,
-      spot.price_per_hour,
+      {
+        id: spot.id,
+        price_per_hour: spot.price_per_hour,
+      },
     ])
   )
 
-  return spots.map((spot) => ({
-    ...spot,
-    price_per_hour:
-    priceByPlaceId.get(spot.google_place_id) ??
-    spot.price_per_hour ??
-    null,
-  }))
+  return spots.map((spot) => {
+    const dbSpot = spotByPlaceId.get(spot.google_place_id)
+
+    return {
+      ...spot,
+      id: spot.id ?? dbSpot?.id ?? null,
+      price_per_hour:
+        dbSpot?.price_per_hour ??
+        spot.price_per_hour ??
+        null,
+    }
+  })
 }
+
+
+const SOURCE_PRECEDENCE = [
+  'field_verified',
+  'owner_verified',
+  'crowd_verified',
+  'google_raw',
+]
+
+
+async function resolveAttributes(spotId) {
+  const { data, error } = await supabase
+    .from('parking_spot_attributes')
+    .select('field_name, value, source, suppressed')
+    .eq('spot_id', spotId)
+
+  if (error) throw error
+
+  const grouped = new Map()
+
+  for (const row of data || []) {
+    if (row.suppressed) continue
+    const rank = SOURCE_PRECEDENCE.indexOf(row.source)
+    if (rank === -1) continue
+    const existing = grouped.get(row.field_name)
+    if (!existing || rank < existing.rank) {
+      grouped.set(row.field_name, { value: row.value, source: row.source, rank })
+    }
+  }
+
+  const attributes = {}
+  for (const [fieldName, resolved] of grouped.entries()) {
+    attributes[fieldName] = { value: resolved.value, source: resolved.source }
+  }
+
+  const bestRank = Array.from(grouped.values()).reduce(
+    (min, row) => (row.rank < min ? row.rank : min),
+    Infinity
+  )
+  const verification_tier =
+    bestRank === Infinity ? 'unverified' : SOURCE_PRECEDENCE[bestRank]
+
+  return { attributes, verification_tier }
+}
+
+
+function getSpotCoordinates(spot) {
+  if (
+    spot.location &&
+    Array.isArray(spot.location.coordinates) &&
+    spot.location.coordinates.length === 2
+  ) {
+    return {
+      lng: spot.location.coordinates[0],
+      lat: spot.location.coordinates[1],
+    }
+  }
+
+  if (typeof spot.lat === 'number' && typeof spot.lng === 'number') {
+    return {
+      lat: spot.lat,
+      lng: spot.lng,
+    }
+  }
+
+  if (
+    typeof spot.latitude === 'number' &&
+    typeof spot.longitude === 'number'
+  ) {
+    return {
+      lat: spot.latitude,
+      lng: spot.longitude,
+    }
+  }
+
+  return {
+    lat: null,
+    lng: null,
+  }
+}
+
+
+async function getAmenities(spot) {
+  const { data: cache, error: cacheError } = await supabase
+    .from('parking_spot_amenities_cache')
+    .select('amenities, last_fetched_at, cache_invalidated_at')
+    .eq('spot_id', spot.id)
+    .maybeSingle()
+
+  if (cacheError) throw cacheError
+
+  const cacheIsFresh =
+    cache?.amenities &&
+    (
+      !cache.cache_invalidated_at ||
+      new Date(cache.last_fetched_at) > new Date(cache.cache_invalidated_at)
+    )
+
+  if (cacheIsFresh) {
+    return cache.amenities
+  }
+
+  const amenities = await fetchGoogleAmenities(spot)
+
+  const { error: upsertError } = await supabase
+    .from('parking_spot_amenities_cache')
+    .upsert(
+      {
+        spot_id: spot.id,
+        amenities,
+        last_fetched_at: new Date().toISOString(),
+        cache_invalidated_at: cache?.cache_invalidated_at ?? null,
+      },
+      { onConflict: 'spot_id' },
+    )
+
+  if (upsertError) {
+    console.error('amenities cache upsert error:', upsertError)
+  }
+
+  return amenities
+}
+
+
+const AMENITY_SEARCHES = [
+  {
+    key: 'petrol_bunk',
+    type: 'gas_station',
+  },
+  {
+    key: 'ev_charging',
+    type: 'electric_vehicle_charging_station',
+  },
+  {
+    key: 'car_wash',
+    type: 'car_wash',
+  },
+]
+
+
+async function fetchGoogleAmenities(spot) {
+  const { lat, lng } = getSpotCoordinates(spot)
+
+  if (!lat || !lng) {
+    return {
+      petrol_bunk: false,
+      ev_charging: false,
+      car_wash: false,
+    }
+  }
+
+  const results = await Promise.all(
+    AMENITY_SEARCHES.map(async (amenity) => {
+      const url = new URL(
+        'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
+      )
+
+      url.searchParams.set('location', `${lat},${lng}`)
+      url.searchParams.set('radius', '500')
+      url.searchParams.set('type', amenity.type)
+      url.searchParams.set('key', process.env.GOOGLE_PLACES_API_KEY)
+
+      const response = await fetch(url.toString())
+      const data = await response.json()
+
+      if (data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+        throw new Error(
+          `Google Places error for ${amenity.type}: ${data.status}`
+        )
+      }
+
+      return {
+        key: amenity.key,
+        available: (data.results || []).length > 0,
+      }
+    })
+  )
+
+  return results.reduce((acc, result) => {
+    acc[result.key] = result.available
+    return acc
+  }, {})
+}
+
 
 router.post('/', async (req, res) => {
   try {
@@ -104,11 +298,13 @@ router.post('/', async (req, res) => {
     const { error: upsertError } = await supabase
       .from('parking_spots')
       .upsert(
-        spotsWithPrices.map(({ price_per_hour, ...spot }) => ({
-          ...spot,
-          ...(price_per_hour != null ? { price_per_hour } : {}),
-          location: `SRID=4326;POINT(${spot.lng} ${spot.lat})`,
-        })),
+        spotsWithPrices.map(
+          ({ id, price_per_hour, ...spot }) => ({
+            ...spot,
+            ...(price_per_hour != null ? { price_per_hour } : {}),
+            location: `SRID=4326;POINT(${spot.lng} ${spot.lat})`,
+          })
+        ),
         { onConflict: 'google_place_id' },
       )
 
@@ -124,5 +320,36 @@ router.post('/', async (req, res) => {
     res.status(500).json({ error: error.message })
   }
 })
+
+
+router.get('/:id', async (req, res) => {
+  try {
+    const { id } = req.params
+
+    const { data: spot, error: spotError } = await supabase
+  .rpc('get_parking_spot_detail', {
+    spot_uuid: id,
+  })
+  .maybeSingle()
+
+    if (spotError || !spot) {
+      return res.status(404).json({ error: 'Parking spot not found' })
+    }
+
+    const { attributes, verification_tier } = await resolveAttributes(id)
+    const amenities = await getAmenities(spot)
+
+    return res.json({
+      ...spot,
+      attributes,
+      verification_tier,
+      amenities,
+    })
+  } catch (error) {
+    console.error('spot detail error:', error)
+    return res.status(500).json({ error: error.message })
+  }
+})
+
 
 module.exports = router
