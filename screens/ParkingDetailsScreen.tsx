@@ -9,6 +9,8 @@ import {
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../App';
+import VerificationBadge from '../components/VerificationBadge';
+import { logNavigation } from '../lib/api';
 import {
   colors,
   fontWeight,
@@ -32,12 +34,20 @@ export default function ParkingDetailsScreen({
     const url =
       `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}`;
 
+    void logNavigation(spot.id).catch((error) => {
+      console.error('Could not log navigation:', error);
+    });
+
     try {
       await Linking.openURL(url);
     } catch (error) {
       console.error('Could not open Google Maps:', error);
     }
   };
+
+  const verificationTier =
+    spot.verification_tier ??
+    (spot.source === 'google_raw' ? 'google_raw' : 'unverified');
 
   return (
     <View style={styles.container}>
@@ -52,6 +62,7 @@ export default function ParkingDetailsScreen({
         <Text style={styles.eyebrow}>PARKING DETAILS</Text>
 
         <Text style={styles.name}>{spot.name}</Text>
+        <VerificationBadge tier={verificationTier} />
 
         <View style={styles.divider} />
 
@@ -70,9 +81,11 @@ export default function ParkingDetailsScreen({
         <Pressable
           style={styles.navigateButton}
           onPress={handleNavigate}
+          accessibilityRole="button"
+          accessibilityLabel="Get Directions"
         >
           <Text style={styles.navigateButtonText}>
-            Navigate with Google Maps
+            Get Directions
           </Text>
         </Pressable>
       </View>

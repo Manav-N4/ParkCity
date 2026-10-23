@@ -1,7 +1,6 @@
 
 import { useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,7 +12,8 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../App';
 import ParkingSpotCard from '../components/ParkingSpotCard';
-import SearchBar, { Suggestion } from '../components/SearchBar';
+import SearchBar, { Suggestion } from '../components/ui/SearchBar';
+import SkeletonCard from '../components/ui/SkeletonCard';
 import {
   colors,
   fontWeight,
@@ -134,83 +134,15 @@ export default function HomeScreen({ navigation }: Props) {
       contentContainerStyle={styles.content}
       showsVerticalScrollIndicator={false}
     >
-      <View style={styles.header}>
-        <View style={styles.brand}>
-          <View style={styles.brandMark}>
-            <Text style={styles.brandMarkText}>P</Text>
-          </View>
-
-          <View>
-            <Text style={styles.brandName}>parkcity</Text>
-            <Text style={styles.brandTagline}>
-              PARK SMARTER. EXPLORE MORE.
-            </Text>
-          </View>
-        </View>
-
-        <View style={styles.profileButton}>
-          <Text style={styles.profileInitial}>A</Text>
-        </View>
-      </View>
-
       {!showResults && (
         <>
-          <View style={styles.hero}>
-            <Image
-              source={require('../assets/destinations/Vidhana-Soudha.jpg')}
-              style={styles.heroImage}
-              contentFit="cover"
-              transition={250}
-            />
-
-            <LinearGradient
-              colors={[
-                colors.background,
-                'rgba(250,247,239,0.94)',
-                'rgba(250,247,239,0.35)',
-                'rgba(250,247,239,0.04)',
-              ]}
-              locations={[0, 0.3, 0.68, 1]}
-              start={{ x: 0, y: 0.7 }}
-              end={{ x: 1, y: 0.7 }}
-              style={styles.heroHorizontalFade}
-            />
-
-            <LinearGradient
-              colors={[
-                'rgba(250,247,239,0)',
-                'rgba(250,247,239,0.05)',
-                colors.background,
-              ]}
-              locations={[0, 0.5, 1]}
-              start={{ x: 0.5, y: 0 }}
-              end={{ x: 0.5, y: 1 }}
-              style={styles.heroBottomFade}
-            />
-
-            <View style={styles.heroCopy}>
-              <Text style={styles.eyebrow}>
-                YOUR CITY, YOUR WAY
-              </Text>
-
-              <Text style={styles.heroTitle}>
-                Your next{'\n'}destination
-              </Text>
-
-              <Text style={styles.heroAccent}>
-                starts here.
-              </Text>
-
-              <Text style={styles.heroSubtitle}>
-                Pick a place. We’ll find{'\n'}your parking.
-              </Text>
+          <View style={styles.topSearchRow}>
+            <View style={styles.searchBarContainer}>
+              <SearchBar onSelectSuggestion={handleSelectSuggestion} />
             </View>
-          </View>
-
-          <View style={styles.searchSection}>
-            <SearchBar
-              onSelectSuggestion={handleSelectSuggestion}
-            />
+            <View style={styles.profileButton}>
+              <Text style={styles.profileInitial}>A</Text>
+            </View>
           </View>
 
           <View style={styles.destinationsSection}>
@@ -219,12 +151,10 @@ export default function HomeScreen({ navigation }: Props) {
                 <Text style={styles.sectionTitle}>
                   Popular in Bengaluru
                 </Text>
-
                 <Text style={styles.sectionSubtitle}>
                   Find your next destination.
                 </Text>
               </View>
-
               <Text style={styles.cityLabel}>BLR</Text>
             </View>
 
@@ -232,15 +162,14 @@ export default function HomeScreen({ navigation }: Props) {
               {destinations.map((destination) => (
                 <Pressable
                   key={destination.number}
-                  onPress={() =>
-                    handleSelectDestination(destination)
-                  }
+                  onPress={() => handleSelectDestination(destination)}
                   disabled={loading}
-                  style={[
+                  style={({ pressed }) => [
                     styles.destinationCard,
                     destination.size === 'large'
                       ? styles.destinationLarge
                       : styles.destinationSmall,
+                    pressed && styles.destinationCardPressed,
                   ]}
                 >
                   <Image
@@ -252,13 +181,14 @@ export default function HomeScreen({ navigation }: Props) {
 
                   <LinearGradient
                     colors={[
-                      'rgba(12,28,20,0.02)',
-                      'rgba(12,28,20,0.12)',
-                      'rgba(12,28,20,0.88)',
+                      'rgba(10,18,14,0.02)',
+                      'rgba(10,18,14,0.18)',
+                      'rgba(10,18,14,0.94)',
                     ]}
-                    locations={[0, 0.42, 1]}
+                    locations={[0.15, 0.5, 1]}
                     start={{ x: 0.5, y: 0 }}
                     end={{ x: 0.5, y: 1 }}
+                    pointerEvents="none"
                     style={StyleSheet.absoluteFill}
                   />
 
@@ -269,19 +199,19 @@ export default function HomeScreen({ navigation }: Props) {
                   </View>
 
                   <View style={styles.destinationBottom}>
-                    <Text style={styles.destinationName}>
+                    <Text
+                      style={styles.destinationName}
+                      numberOfLines={2}
+                    >
                       {destination.name}
                     </Text>
-
                     <Text style={styles.destinationArea}>
                       {destination.area}
                     </Text>
                   </View>
 
                   <View style={styles.destinationArrow}>
-                    <Text style={styles.destinationArrowText}>
-                      ↗
-                    </Text>
+                    <Text style={styles.destinationArrowText}>↗</Text>
                   </View>
                 </Pressable>
               ))}
@@ -292,12 +222,10 @@ export default function HomeScreen({ navigation }: Props) {
             <View style={styles.footerMark}>
               <Text style={styles.footerMarkText}>P</Text>
             </View>
-
             <View style={styles.footerCopy}>
               <Text style={styles.footerTitle}>
                 Made for the way you move.
               </Text>
-
               <Text style={styles.footerSubtitle}>
                 Discover parking around your destination.
               </Text>
@@ -327,14 +255,14 @@ export default function HomeScreen({ navigation }: Props) {
 
           {loading && (
             <View style={styles.loadingState}>
-              <ActivityIndicator
-                size="large"
-                color={colors.primary}
-              />
-
               <Text style={styles.stateText}>
                 Finding parking for you...
               </Text>
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
+              <SkeletonCard />
             </View>
           )}
 
@@ -420,20 +348,32 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+  topSearchRow: {
+    paddingHorizontal: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    zIndex: 5,
+  },
+
+  searchBarContainer: {
+    flex: 1,
+    minWidth: 0,
+  },
+
+  destinationCardPressed: {
+    transform: [{ scale: 0.985 }],
+  },
+
   profileButton: {
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: 'rgba(255,255,255,0.7)',
+    backgroundColor: '#F2F3EF',
     borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.9)',
+    borderColor: '#E1E4DD',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#17201C',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.07,
-    shadowRadius: 12,
-    elevation: 3,
   },
 
   profileInitial: {
@@ -509,7 +449,7 @@ const styles = StyleSheet.create({
   },
 
   destinationsSection: {
-    marginTop: 34,
+    marginTop: 36,
     paddingHorizontal: spacing.lg,
   },
 
@@ -553,7 +493,9 @@ const styles = StyleSheet.create({
 
   destinationCard: {
     overflow: 'hidden',
-    borderRadius: 22,
+    borderRadius: 28,
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
     backgroundColor: '#D9E0D7',
     justifyContent: 'flex-end',
   },
@@ -568,12 +510,12 @@ const styles = StyleSheet.create({
 
   destinationNumber: {
     position: 'absolute',
-    top: 16,
-    left: 16,
+    top: 12,
+    left: 12,
     paddingHorizontal: 13,
     paddingVertical: 7,
     borderRadius: 18,
-    backgroundColor: 'rgba(23,32,28,0.45)',
+    backgroundColor: 'rgba(10,18,14,0.48)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.4)',
   },
@@ -586,14 +528,15 @@ const styles = StyleSheet.create({
 
   destinationBottom: {
     paddingHorizontal: 18,
-    paddingBottom: 20,
+    paddingTop: 12,
+    paddingBottom: 15,
     paddingRight: 66,
   },
 
   destinationName: {
     color: '#FFFFFF',
-    fontSize: 22,
-    lineHeight: 27,
+    fontSize: 23,
+    lineHeight: 28,
     fontWeight: fontWeight.bold,
     letterSpacing: -0.4,
   },
@@ -601,17 +544,17 @@ const styles = StyleSheet.create({
   destinationArea: {
     color: 'rgba(255,255,255,0.88)',
     fontSize: 13,
-    marginTop: 5,
+    marginTop: 3,
   },
 
   destinationArrow: {
     position: 'absolute',
-    right: 16,
-    bottom: 18,
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: 'rgba(255,255,255,0.19)',
+    right: 12,
+    bottom: 15,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     borderWidth: 1,
     borderColor: 'rgba(255,255,255,0.55)',
     alignItems: 'center',
@@ -703,9 +646,8 @@ const styles = StyleSheet.create({
   },
 
   loadingState: {
-    alignItems: 'center',
-    gap: spacing.md,
-    paddingVertical: 48,
+    gap: spacing.sm,
+    paddingTop: spacing.sm,
   },
 
   stateText: {
