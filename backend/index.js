@@ -15,6 +15,9 @@ app.use('/search', searchRouter)
 const placeDetailsRouter = require('./routes/place-details')
 app.use('/place-details', placeDetailsRouter)
 
+const navigationRouter = require('./routes/navigation')
+app.use('/navigation-log', navigationRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
