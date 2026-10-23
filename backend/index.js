@@ -21,6 +21,9 @@ app.use('/navigation-log', requireAuth, navigationRouter)
 const profileRouter = require('./routes/profile')
 app.use('/profile', requireAuth, profileRouter)
 
+const claimRouter = require('./routes/claim')
+app.use('/claim', requireAuth, claimRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
