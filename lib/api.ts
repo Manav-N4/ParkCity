@@ -1,4 +1,4 @@
-const API_BASE_URL = 'https://parkcity.onrender.com';
+export const API_BASE_URL = 'https://parkcity.onrender.com';
 
 export type PlaceDetails = {
   lat: number;
@@ -57,4 +57,20 @@ export async function searchNearbyParking(
   }
 
   return response.json();
+}
+
+export async function logNavigation(spotId: string): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/navigation-log`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      spot_id: spotId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Navigation log failed: ${response.status}`);
+  }
 }
