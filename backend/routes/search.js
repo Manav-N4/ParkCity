@@ -78,31 +78,27 @@ async function resolveAttributes(spotId) {
 
   for (const row of data || []) {
     if (row.suppressed) continue
-
     const rank = SOURCE_PRECEDENCE.indexOf(row.source)
     if (rank === -1) continue
-
     const existing = grouped.get(row.field_name)
-
     if (!existing || rank < existing.rank) {
-      grouped.set(row.field_name, {
-        value: row.value,
-        source: row.source,
-        rank,
-      })
+      grouped.set(row.field_name, { value: row.value, source: row.source, rank })
     }
   }
 
   const attributes = {}
-
   for (const [fieldName, resolved] of grouped.entries()) {
-    attributes[fieldName] = {
-      value: resolved.value,
-      source: resolved.source,
-    }
+    attributes[fieldName] = { value: resolved.value, source: resolved.source }
   }
 
-  return attributes
+  const bestRank = Array.from(grouped.values()).reduce(
+    (min, row) => (row.rank < min ? row.rank : min),
+    Infinity
+  )
+  const verification_tier =
+    bestRank === Infinity ? 'unverified' : SOURCE_PRECEDENCE[bestRank]
+
+  return { attributes, verification_tier }
 }
 
 
@@ -340,12 +336,13 @@ router.get('/:id', async (req, res) => {
       return res.status(404).json({ error: 'Parking spot not found' })
     }
 
-    const attributes = await resolveAttributes(id)
+    const { attributes, verification_tier } = await resolveAttributes(id)
     const amenities = await getAmenities(spot)
 
     return res.json({
       ...spot,
       attributes,
+      verification_tier,
       amenities,
     })
   } catch (error) {
