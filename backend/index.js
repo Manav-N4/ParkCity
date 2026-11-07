@@ -48,6 +48,9 @@ app.use('/sessions', requireAuth, sessionsRouter)
 const spendRouter = require('./routes/spend')
 app.use('/spend', requireAuth, spendRouter)
 
+const remindersRouter = require('./routes/reminders')
+app.use('/reminders', requireAuth, remindersRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
