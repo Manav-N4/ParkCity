@@ -33,6 +33,9 @@ app.use('/availability', requireAuth, availabilityRouter)
 const statsRouter = require('./routes/stats')
 app.use('/stats', requireAuth, statsRouter)
 
+const reportsRouter = require('./routes/reports')
+app.use('/reports', requireAuth, reportsRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
