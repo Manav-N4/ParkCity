@@ -10,16 +10,16 @@ import {
 } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
-import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 
-import { RootStackParamList } from '../App';
+import type { RootStackParamList } from '../App';
 import VerificationBadge from './VerificationBadge';
 import {
   colors,
   fontWeight,
   spacing,
 } from '../constants/tokens';
-import { ParkingSpot } from '../types/parking';
+import type { ParkingSpot } from '../types/parking';
 
 type ParkingSpotCardProps = {
   spot: ParkingSpot;
@@ -84,12 +84,10 @@ export default function ParkingSpotCard({
           pointerEvents="none"
         />
 
-        {/* Three-tier verification badge */}
         <View style={styles.badgePosition}>
           <VerificationBadge tier={verificationTier} />
         </View>
 
-        {/* Animated favorite button */}
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
@@ -97,10 +95,7 @@ export default function ParkingSpotCard({
           }
           accessibilityState={{ selected: isFavorite }}
           hitSlop={8}
-          onPress={(event) => {
-            event.stopPropagation();
-            toggleFavorite();
-          }}
+          onPress={toggleFavorite}
           style={({ pressed }) => [
             styles.favoriteButton,
             isFavorite && styles.favoriteButtonActive,
@@ -125,7 +120,6 @@ export default function ParkingSpotCard({
           </Animated.View>
         </Pressable>
 
-        {/* Parking information */}
         <View style={styles.content}>
           <Text numberOfLines={2} style={styles.name}>
             {spot.name}
@@ -151,10 +145,7 @@ export default function ParkingSpotCard({
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={`View parking details for ${spot.name}`}
-              onPress={(event) => {
-                event.stopPropagation();
-                handlePress();
-              }}
+              onPress={handlePress}
               style={({ pressed }) => [
                 styles.directionsButton,
                 pressed && styles.buttonPressed,
@@ -175,7 +166,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     height: 285,
-    marginBottom: spacing.lg ?? 24,
+    marginBottom: spacing.lg,
     borderRadius: 28,
     borderWidth: 4,
     borderColor: colors.white,

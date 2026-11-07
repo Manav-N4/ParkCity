@@ -2,6 +2,7 @@
   "expo": {
     "name": "parkcity",
     "slug": "parkcity",
+    "scheme": "parkcity",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -16,14 +17,30 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "package": "com.aadee3207.parkcity"
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-sqlite",
-      "expo-image"
-    ]
+      "expo-image",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "ParkCity does not access your gallery for claim photos.",
+          "cameraPermission": "ParkCity needs camera access to photograph the parking spot.",
+          "microphonePermission": false
+        }
+      ],
+      "expo-web-browser",
+      "expo-font"
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "6f827689-7e17-425d-a411-b82839716ccd"
+      }
+    }
   }
 }
