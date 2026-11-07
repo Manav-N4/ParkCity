@@ -45,6 +45,9 @@ app.use('/saved', requireAuth, savedRouter)
 const sessionsRouter = require('./routes/sessions')
 app.use('/sessions', requireAuth, sessionsRouter)
 
+const spendRouter = require('./routes/spend')
+app.use('/spend', requireAuth, spendRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
