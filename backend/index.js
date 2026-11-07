@@ -39,6 +39,9 @@ app.use('/reports', requireAuth, reportsRouter)
 const adminRouter = require('./routes/admin')
 app.use('/admin', requireAuth, adminRouter)
 
+const savedRouter = require('./routes/saved')
+app.use('/saved', requireAuth, savedRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
