@@ -30,6 +30,9 @@ app.use('/listing', requireAuth, listingRouter)
 const availabilityRouter = require('./routes/availability')
 app.use('/availability', requireAuth, availabilityRouter)
 
+const statsRouter = require('./routes/stats')
+app.use('/stats', requireAuth, statsRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
