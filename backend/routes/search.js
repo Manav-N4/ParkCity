@@ -296,29 +296,47 @@ router.post('/', async (req, res) => {
     })
 
     const { error: upsertError } = await supabase
-      .from('parking_spots')
-      .upsert(
-        spotsWithPrices.map(
-          ({ id, price_per_hour, ...spot }) => ({
-            ...spot,
-            ...(price_per_hour != null ? { price_per_hour } : {}),
-            location: `SRID=4326;POINT(${spot.lng} ${spot.lat})`,
-          })
-        ),
-        { onConflict: 'google_place_id' },
-      )
+  .from('parking_spots')
+  .upsert(
+    spotsWithPrices.map(({ id, price_per_hour, ...spot }) => ({
+      ...spot,
+      ...(price_per_hour != null ? { price_per_hour } : {}),
+      location: `SRID=4326;POINT(${spot.lng} ${spot.lat})`,
+    })),
+    { onConflict: 'google_place_id' },
+  )
 
-    if (upsertError) {
-      console.log(
-        'parking_spots upsert error:',
-        JSON.stringify(upsertError),
-      )
-    }
+if (upsertError) {
+  console.log('parking_spots upsert error:', JSON.stringify(upsertError))
+}
 
-    return res.json(spotsWithPrices)
-  } catch (error) {
-    res.status(500).json({ error: error.message })
-  }
+// fetch real UUIDs after upsert
+const placeIds = spotsWithPrices.map((s) => s.google_place_id).filter(Boolean)
+const { data: upsertedSpots } = await supabase
+  .from('parking_spots')
+  .select('id, google_place_id')
+  .in('google_place_id', placeIds)
+
+const idByPlaceId = new Map(
+  (upsertedSpots || []).map((s) => [s.google_place_id, s.id])
+)
+
+const spotsWithIds = spotsWithPrices.map((spot) => ({
+  ...spot,
+  id: idByPlaceId.get(spot.google_place_id) ?? spot.id ?? null,
+}))
+
+await supabase.from('cached_parking_spots').upsert({
+  geohash: hash,
+  geohash_precision: 6,
+  cached_spots: spotsWithIds,
+  last_fetched_at: new Date().toISOString(),
+})
+
+return res.json(spotsWithIds)
+} catch (error) {
+  res.status(500).json({ error: error.message })
+}
 })
 
 
