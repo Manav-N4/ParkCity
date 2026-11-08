@@ -51,6 +51,9 @@ app.use('/spend', requireAuth, spendRouter)
 const remindersRouter = require('./routes/reminders')
 app.use('/reminders', requireAuth, remindersRouter)
 
+const ratingsRouter = require('./routes/ratings')
+app.use('/ratings', requireAuth, ratingsRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
