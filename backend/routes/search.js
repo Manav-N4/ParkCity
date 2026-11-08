@@ -295,13 +295,15 @@ router.post('/', async (req, res) => {
       last_fetched_at: new Date().toISOString(),
     })
 
+    console.log('spots to upsert:', JSON.stringify(spotsWithPrices.map(s => ({ name: s.name, lat: s.lat, lng: s.lng }))))
+
     const { error: upsertError } = await supabase
   .from('parking_spots')
   .upsert(
-    spotsWithPrices.map(({ id, price_per_hour, ...spot }) => ({
+    spotsWithPrices.map(({ id, price_per_hour, lat, lng, ...spot }) => ({
       ...spot,
       ...(price_per_hour != null ? { price_per_hour } : {}),
-      location: `SRID=4326;POINT(${spot.lng} ${spot.lat})`,
+      location: `SRID=4326;POINT(${lng} ${lat})`,
     })),
     { onConflict: 'google_place_id' },
   )
