@@ -261,7 +261,19 @@ router.post('/', async (req, res) => {
       const cachedSpots = data[0].cached_spots || []
       const mergedCachedSpots = await mergePrices(cachedSpots)
 
-      return res.json(mergedCachedSpots)
+      // fetch sponsored spot for this geohash area
+      const now = new Date().toISOString()
+      const { data: sponsored } = await supabase
+        .from('sponsored_spots')
+        .select('spot_id, parking_spots(id, name, address, price_per_hour, source)')
+        .eq('monthly_fee_paid', true)
+        .lte('active_from', now)
+        .gte('active_until', now)
+        .maybeSingle()
+
+      const sponsoredSpot = sponsored?.parking_spots ?? null
+
+      return res.json({ spots: mergedCachedSpots, sponsored: sponsoredSpot })
     }
 
     const API_KEY = process.env.GOOGLE_PLACES_API_KEY
@@ -335,7 +347,19 @@ await supabase.from('cached_parking_spots').upsert({
   last_fetched_at: new Date().toISOString(),
 })
 
-return res.json(spotsWithIds)
+// fetch sponsored spot for this geohash area
+const now = new Date().toISOString()
+const { data: sponsored } = await supabase
+  .from('sponsored_spots')
+  .select('spot_id, parking_spots(id, name, address, price_per_hour, source)')
+  .eq('monthly_fee_paid', true)
+  .lte('active_from', now)
+  .gte('active_until', now)
+  .maybeSingle()
+
+const sponsoredSpot = sponsored?.parking_spots ?? null
+
+return res.json({ spots: spotsWithIds, sponsored: sponsoredSpot })
 } catch (error) {
   res.status(500).json({ error: error.message })
 }
