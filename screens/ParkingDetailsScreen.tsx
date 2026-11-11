@@ -1,16 +1,18 @@
 
 import {
+  Alert,
   Linking,
   StyleSheet,
   Text,
   View,
   Pressable,
 } from 'react-native';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import { RootStackParamList } from '../App';
 import VerificationBadge from '../components/VerificationBadge';
 import { logNavigation } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import {
   colors,
   fontWeight,
@@ -42,6 +44,42 @@ export default function ParkingDetailsScreen({
       await Linking.openURL(url);
     } catch (error) {
       console.error('Could not open Google Maps:', error);
+    }
+  };
+
+  const handleClaim = async () => {
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) {
+        Alert.alert(
+          'Something went wrong',
+          'Could not verify your sign-in status. Please try again.',
+        );
+        return;
+      }
+
+      if (!session?.user) {
+        navigation.navigate('EmailLogin', {
+          next: {
+            screen: 'ClaimSpot',
+            spot,
+          },
+        });
+        return;
+      }
+
+      navigation.navigate('ClaimSpot', { spot });
+    } catch (error) {
+      console.error('Could not check sign-in status:', error);
+
+      Alert.alert(
+        'Something went wrong',
+        'Could not verify your sign-in status. Please try again.',
+      );
     }
   };
 
@@ -86,6 +124,17 @@ export default function ParkingDetailsScreen({
         >
           <Text style={styles.navigateButtonText}>
             Get Directions
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.claimButton}
+          onPress={handleClaim}
+          accessibilityRole="button"
+          accessibilityLabel="Claim this spot"
+        >
+          <Text style={styles.claimButtonText}>
+            Claim this spot
           </Text>
         </Pressable>
       </View>
@@ -157,6 +206,19 @@ const styles = StyleSheet.create({
   },
   navigateButtonText: {
     color: colors.background,
+    fontSize: typography.body,
+    fontWeight: fontWeight.semibold,
+  },
+  claimButton: {
+    borderColor: colors.primary,
+    borderWidth: 1,
+    borderRadius: radius.md,
+    padding: spacing.md,
+    alignItems: 'center',
+    marginTop: spacing.md,
+  },
+  claimButtonText: {
+    color: colors.primary,
     fontSize: typography.body,
     fontWeight: fontWeight.semibold,
   },
