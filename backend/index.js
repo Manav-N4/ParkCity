@@ -60,6 +60,9 @@ app.use('/deals', requireAuth, dealsRouter)
 const paymentsRouter = require('./routes/payments')
 const webhookRouter = require('./routes/webhook')
 
+const settingsRouter = require('./routes/settings')
+app.use('/settings', requireAuth, settingsRouter)
+
 app.use('/payments', requireAuth, paymentsRouter)
 app.use('/razorpay-webhook', webhookRouter)
 
