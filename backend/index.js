@@ -57,6 +57,12 @@ app.use('/ratings', requireAuth, ratingsRouter)
 const dealsRouter = require('./routes/deals')
 app.use('/deals', requireAuth, dealsRouter)
 
+const paymentsRouter = require('./routes/payments')
+const webhookRouter = require('./routes/webhook')
+
+app.use('/payments', requireAuth, paymentsRouter)
+app.use('/razorpay-webhook', webhookRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
