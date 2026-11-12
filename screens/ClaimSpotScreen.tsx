@@ -1,4 +1,3 @@
-
 import { useState } from 'react';
 import {
   ActivityIndicator,
@@ -194,11 +193,7 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
       throw new Error(`Photo upload failed: ${error.message}`);
     }
 
-    const { data } = supabase.storage
-      .from('claim-photos')
-      .getPublicUrl(path);
-
-    return data.publicUrl;
+    return path;
   };
 
   const submitClaim = async () => {
@@ -225,16 +220,31 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
         const photo = capturedPhotos[index];
         const timestamp = Date.now() + index;
 
-        const url = await uploadPhoto(
+        const path = await uploadPhoto(
           photo.uri,
           session.user.id,
           timestamp,
         );
 
-        photoUrls.push(url);
+        photoUrls.push(path);
       }
 
       const firstPhoto = capturedPhotos[0];
+
+      const claimPayload = {
+        spot_id: spot.id,
+        ownership_details: {
+          business_name: businessName.trim(),
+          owner_name: ownerName.trim(),
+          contact: contact.trim(),
+        },
+        photo_urls: photoUrls,
+        photo_lat: firstPhoto.latitude,
+        photo_lng: firstPhoto.longitude,
+        price_per_hour: Number(price),
+        operating_hours: operatingHours.trim(),
+        capacity: Number(capacity),
+      };
 
       const response = await fetch(`${API_BASE_URL}/claim`, {
         method: 'POST',
@@ -242,37 +252,39 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${session.access_token}`,
         },
-        body: JSON.stringify({
-          spot_id: spot.id,
-          ownership_details: {
-            business_name: businessName.trim(),
-            owner_name: ownerName.trim(),
-            contact: contact.trim(),
-          },
-          photo_urls: photoUrls,
-          photo_lat: firstPhoto.latitude,
-          photo_lng: firstPhoto.longitude,
-          price_per_hour: Number(price),
-          operating_hours: operatingHours.trim(),
-          capacity: Number(capacity),
-        }),
+        body: JSON.stringify(claimPayload),
       });
 
       const responseText = await response.text();
-      let responseBody: { error?: string; message?: string } = {};
+
+      let responseBody: {
+        error?: string;
+        message?: string;
+      } = {};
 
       try {
         responseBody = responseText ? JSON.parse(responseText) : {};
       } catch {
-        // Keep a useful fallback for non-JSON server responses.
+        // Preserve the raw response for debugging.
       }
 
       if (!response.ok) {
-        throw new Error(
-          responseBody.error ||
-            responseBody.message ||
-            `Claim submission failed (${response.status}).`,
+        Alert.alert(
+          'Claim Debug Information',
+          [
+            `HTTP Status: ${response.status}`,
+            '',
+            `Spot ID: ${claimPayload.spot_id}`,
+            '',
+            `Photo count: ${claimPayload.photo_urls.length}`,
+            '',
+            `Photo paths:\n${claimPayload.photo_urls.join('\n')}`,
+            '',
+            `Backend response:\n${responseText || 'Empty response'}`,
+          ].join('\n'),
         );
+
+        return;
       }
 
       Alert.alert(
@@ -281,7 +293,6 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
         [{ text: 'OK', onPress: () => navigation.goBack() }],
       );
     } catch (error) {
-      console.error('Claim submission failed:', error);
       Alert.alert(
         'Could not submit claim',
         error instanceof Error ? error.message : 'Please try again.',

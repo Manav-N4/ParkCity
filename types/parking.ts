@@ -1,3 +1,4 @@
+
 export type VerificationTier =
   | 'field_verified'
   | 'owner_verified'
@@ -6,7 +7,7 @@ export type VerificationTier =
   | 'unverified';
 
 export type ParkingSpot = {
-  id: string;
+  id: string | null;
   google_place_id: string;
   name: string;
   lat: number;

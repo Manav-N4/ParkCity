@@ -9,8 +9,12 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { RootStackParamList } from '../App';
+import type { CompositeScreenProps } from '@react-navigation/native';
+import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
+import type { NativeStackScreenProps } from '@react-navigation/native-stack';
+
+import type { RootStackParamList } from '../App';
+import type { MainTabParamList } from '../navigation/MainTabNavigator';
 import ParkingSpotCard from '../components/ParkingSpotCard';
 import SearchBar, { Suggestion } from '../components/ui/SearchBar';
 import SkeletonCard from '../components/ui/SkeletonCard';
@@ -26,7 +30,10 @@ import {
 } from '../lib/api';
 import { ParkingSpot } from '../types/parking';
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Home'>;
+type Props = CompositeScreenProps<
+  BottomTabScreenProps<MainTabParamList, 'Home'>,
+  NativeStackScreenProps<RootStackParamList>
+>;
 
 const destinations = [
   {
@@ -59,12 +66,14 @@ export default function HomeScreen({ navigation }: Props) {
   const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [hasSearched, setHasSearched] = useState(false);
 
   const handleSearchByPlace = async (
     placeId: string,
     sessionToken: string
   ) => {
     try {
+      setHasSearched(true);
       setLoading(true);
       setError(null);
       setParkingSpots([]);
@@ -74,10 +83,24 @@ export default function HomeScreen({ navigation }: Props) {
         sessionToken
       );
 
-      const spots = await searchNearbyParking(lat, lng);
-      setParkingSpots(spots);
+      const result = await searchNearbyParking(lat, lng);
+      const spots = (result as { spots?: unknown })?.spots;
+
+      if (Array.isArray(spots)) {
+        setParkingSpots(spots as ParkingSpot[]);
+      } else {
+        console.error(
+          'Unexpected parking search response:',
+          result
+        );
+
+        throw new Error(
+          'Invalid parking search response from server.'
+        );
+      }
     } catch (error) {
       console.error('Parking search error:', error);
+
       setError(
         error instanceof Error
           ? error.message
@@ -123,10 +146,10 @@ export default function HomeScreen({ navigation }: Props) {
 
     setParkingSpots([]);
     setError(null);
+    setHasSearched(false);
   };
 
-  const showResults =
-    loading || error !== null || parkingSpots.length > 0;
+  const showResults = hasSearched;
 
   return (
     <ScrollView
@@ -140,9 +163,18 @@ export default function HomeScreen({ navigation }: Props) {
             <View style={styles.searchBarContainer}>
               <SearchBar onSelectSuggestion={handleSelectSuggestion} />
             </View>
-            <View style={styles.profileButton}>
+
+            <Pressable
+              onPress={() => navigation.navigate('MyListings')}
+              style={({ pressed }) => [
+                styles.profileButton,
+                pressed && styles.profileButtonPressed,
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel="My listings"
+            >
               <Text style={styles.profileInitial}>A</Text>
-            </View>
+            </Pressable>
           </View>
 
           <View style={styles.destinationsSection}>
@@ -218,19 +250,7 @@ export default function HomeScreen({ navigation }: Props) {
             </View>
           </View>
 
-          <View style={styles.footerBanner}>
-            <View style={styles.footerMark}>
-              <Text style={styles.footerMarkText}>P</Text>
-            </View>
-            <View style={styles.footerCopy}>
-              <Text style={styles.footerTitle}>
-                Made for the way you move.
-              </Text>
-              <Text style={styles.footerSubtitle}>
-                Discover parking around your destination.
-              </Text>
-            </View>
-          </View>
+
         </>
       )}
 
@@ -374,6 +394,11 @@ const styles = StyleSheet.create({
     borderColor: '#E1E4DD',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  profileButtonPressed: {
+    opacity: 0.75,
+    transform: [{ scale: 0.96 }],
   },
 
   profileInitial: {
