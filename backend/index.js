@@ -66,6 +66,9 @@ app.use('/settings', requireAuth, settingsRouter)
 app.use('/payments', requireAuth, paymentsRouter)
 app.use('/razorpay-webhook', webhookRouter)
 
+const accountRouter = require('./routes/account')
+app.use('/account', requireAuth, accountRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
