@@ -18,6 +18,9 @@ app.use('/place-details', placeDetailsRouter)
 const navigationRouter = require('./routes/navigation')
 app.use('/navigation-log', requireAuth, navigationRouter)
 
+const profileListingsRouter = require('./routes/profile-listings')
+app.use('/profile', requireAuth, profileListingsRouter)
+
 const profileRouter = require('./routes/profile')
 app.use('/profile', requireAuth, profileRouter)
 
