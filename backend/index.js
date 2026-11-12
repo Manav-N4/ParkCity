@@ -3,6 +3,22 @@ const app = express();
 
 require('dotenv').config()
 
+const REQUIRED_ENV = [
+  'SUPABASE_URL',
+  'SUPABASE_SERVICE_ROLE_KEY',
+  'GOOGLE_PLACES_API_KEY',
+  'RAZORPAY_KEY_ID',
+  'RAZORPAY_KEY_SECRET',
+  'RAZORPAY_WEBHOOK_SECRET',
+]
+
+for (const key of REQUIRED_ENV) {
+  if (!process.env[key]) {
+    console.error(`Missing required environment variable: ${key}`)
+    process.exit(1)
+  }
+}
+
 const requireAuth = require('./middleware/auth')
 app.use(express.json());
 
@@ -75,5 +91,8 @@ app.use('/account', requireAuth, accountRouter)
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })
+
+const errorHandler = require('./middleware/errorHandler')
+app.use(errorHandler)
 
 app.listen(3000);

@@ -16,7 +16,10 @@ router.post('/toggle', async (req, res) => {
         .from('saved_spots')
         .insert({ user_id, spot_id })
 
-      if (error) throw error
+      if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
     } else {
       const { error } = await supabase
         .from('saved_spots')
@@ -24,7 +27,10 @@ router.post('/toggle', async (req, res) => {
         .eq('user_id', user_id)
         .eq('spot_id', spot_id)
 
-      if (error) throw error
+      if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
     }
 
     return res.json({ success: true })
@@ -44,7 +50,10 @@ router.get('/', async (req, res) => {
       .eq('user_id', user_id)
       .order('saved_at', { ascending: false })
 
-    if (savedError) throw savedError
+    if (savedError) {
+      console.error('db error:', savedError)
+      throw new Error('Something went wrong')
+    }
 
     if (!savedRows || savedRows.length === 0) {
       return res.json([])
@@ -55,7 +64,10 @@ router.get('/', async (req, res) => {
     const { data: spots, error: spotsError } = await supabase
       .rpc('get_parking_spots_by_ids', { spot_uuids: spotIds })
 
-    if (spotsError) throw spotsError
+    if (spotsError) {
+      console.error('db error:', spotsError)
+      throw new Error('Something went wrong')
+    }
 
     return res.json(spots || [])
   } catch (error) {

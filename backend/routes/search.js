@@ -72,7 +72,10 @@ async function resolveAttributes(spotId) {
     .select('field_name, value, source, suppressed')
     .eq('spot_id', spotId)
 
-  if (error) throw error
+  if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
   const grouped = new Map()
 
@@ -145,7 +148,10 @@ async function getAmenities(spot) {
     .eq('spot_id', spot.id)
     .maybeSingle()
 
-  if (cacheError) throw cacheError
+  if (cacheError) {
+      console.error('db error:', cacheError)
+      throw new Error('Something went wrong')
+    }
 
   const cacheIsFresh =
     cache?.amenities &&
@@ -255,7 +261,10 @@ router.post('/', async (req, res) => {
         new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString(),
       )
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     if (data && data.length > 0) {
       const cachedSpots = data[0].cached_spots || []

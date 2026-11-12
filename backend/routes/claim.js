@@ -73,12 +73,15 @@ router.post('/', async (req, res) => {
       attributeRows.push({ spot_id, field_name: 'capacity', value: String(capacity), source: 'owner_pending' })
     }
 
-    if (attributeRows.length > 0) {
-      const { error: attrError } = await supabase
-        .from('parking_spot_attributes')
-        .insert(attributeRows)
-      if (attrError) throw attrError
-    }
+   if (attributeRows.length > 0) {
+  const { error: attrError } = await supabase
+    .from('parking_spot_attributes')
+    .upsert(attributeRows, { onConflict: 'spot_id,field_name,source' })
+  if (attrError) {
+    await supabase.from('owner_pending').delete().eq('spot_id', spot_id).eq('user_id', user_id)
+    throw attrError
+  }
+}
 
     return res.json({ success: true, geotag_flagged })
   } catch (error) {

@@ -17,7 +17,10 @@ router.get('/', async (req, res) => {
       .not('checked_out_at', 'is', null)
       .gte('checked_in_at', startOfLastMonth)
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     const thisMonthSessions = sessions.filter(s => s.checked_in_at >= startOfMonth)
     const lastMonthSessions = sessions.filter(s => s.checked_in_at < startOfMonth)
