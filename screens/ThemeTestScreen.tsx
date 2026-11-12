@@ -1,4 +1,3 @@
-
 import {
   Pressable,
   ScrollView,
@@ -12,7 +11,6 @@ import { useTheme } from '../contexts/ThemeContext';
 import {
   spacing,
   radius,
-  fontWeight,
 } from '../constants/tokens';
 
 import ThemedText from '../components/ui/ThemedText';
@@ -250,7 +248,7 @@ export default function ThemeTestScreen({ navigation }: Props) {
 
         <PrimaryButton
           title="Return to ParkCity Home"
-          onPress={() => navigation.navigate('Home')}
+          onPress={() => navigation.navigate('MainTabs')}
         />
       </ScrollView>
     </ThemedView>

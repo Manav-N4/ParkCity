@@ -1,3 +1,4 @@
+
 import { useState } from 'react';
 import {
   Alert,
@@ -89,9 +90,20 @@ export default function EmailLoginScreen({ navigation, route }: Props) {
         navigation.reset({
           index: 1,
           routes: [
-            { name: 'Home' },
+            { name: 'MainTabs' },
             {
               name: 'ClaimSpot',
+              params: { spot: next.spot },
+            },
+          ],
+        });
+      } else if (next?.screen === 'ParkingDetails') {
+        navigation.reset({
+          index: 1,
+          routes: [
+            { name: 'MainTabs' },
+            {
+              name: 'ParkingDetails',
               params: { spot: next.spot },
             },
           ],
@@ -99,7 +111,7 @@ export default function EmailLoginScreen({ navigation, route }: Props) {
       } else {
         navigation.reset({
           index: 0,
-          routes: [{ name: 'Home' }],
+          routes: [{ name: 'MainTabs' }],
         });
       }
     } catch (error) {

@@ -1,6 +1,7 @@
 
-import { useRef, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
+  Alert,
   Animated,
   ImageBackground,
   Pressable,
@@ -8,11 +9,9 @@ import {
   Text,
   View,
 } from 'react-native';
-import Svg, { Path } from 'react-native-svg';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { useFocusEffect } from '@react-navigation/native';
 
-import type { RootStackParamList } from '../App';
 import VerificationBadge from './VerificationBadge';
 import {
   colors,
@@ -20,10 +19,19 @@ import {
   spacing,
 } from '../constants/tokens';
 import type { ParkingSpot } from '../types/parking';
+import { getSavedSpots, toggleSavedSpot } from '../lib/api';
+import { supabase } from '../lib/supabase';
 
 type ParkingSpotCardProps = {
   spot: ParkingSpot;
-  navigation: NativeStackNavigationProp<RootStackParamList, 'Home'>;
+  navigation: {
+    navigate: (
+      screen: 'ParkingDetails',
+      params: { spot: ParkingSpot }
+    ) => void;
+  };
+  isInitiallySaved?: boolean;
+  onSavedChange?: (isSaved: boolean) => void;
 };
 
 const PARKING_PLACEHOLDER =
@@ -32,17 +40,83 @@ const PARKING_PLACEHOLDER =
 export default function ParkingSpotCard({
   spot,
   navigation,
+  isInitiallySaved,
+  onSavedChange,
 }: ParkingSpotCardProps) {
-  const [isFavorite, setIsFavorite] = useState(false);
+  const [isSaved, setIsSaved] = useState(isInitiallySaved ?? false);
+  const [isSaving, setIsSaving] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
 
+  const hasValidSpotId =
+    typeof spot.id === 'string' && spot.id.trim().length > 0;
+
+  useFocusEffect(
+    useCallback(() => {
+      if (isInitiallySaved !== undefined) {
+        setIsSaved(isInitiallySaved);
+        return;
+      }
+
+      let isActive = true;
+
+      const checkSavedStatus = async () => {
+        if (!hasValidSpotId) {
+          if (isActive) setIsSaved(false);
+          return;
+        }
+
+        try {
+          const {
+            data: { session },
+            error,
+          } = await supabase.auth.getSession();
+
+          if (error) throw error;
+
+          if (!session?.access_token) {
+            if (isActive) setIsSaved(false);
+            return;
+          }
+
+          const savedSpots = await getSavedSpots(session.access_token);
+
+          const saved = savedSpots.some(
+            (savedSpot) => savedSpot.id === spot.id
+          );
+
+          if (isActive) setIsSaved(saved);
+        } catch (error) {
+          console.error('Could not check saved status:', error);
+        }
+      };
+
+      void checkSavedStatus();
+
+      return () => {
+        isActive = false;
+      };
+    }, [spot.id, isInitiallySaved, hasValidSpotId])
+  );
+
   const handlePress = () => {
-    navigation.navigate('ParkingDetails', { spot });
+    console.log('[ParkCity] Parking card pressed:', {
+      id: spot.id,
+      name: spot.name,
+    });
+
+    try {
+      navigation.navigate('ParkingDetails', { spot });
+      console.log('[ParkCity] ParkingDetails navigation dispatched');
+    } catch (error) {
+      console.error('[ParkCity] Navigation failed:', error);
+      Alert.alert(
+        'Navigation error',
+        error instanceof Error ? error.message : 'Unable to open parking details.'
+      );
+    }
   };
 
-  const toggleFavorite = () => {
-    setIsFavorite((previous) => !previous);
-
+  const animateHeart = () => {
     heartScale.setValue(0.75);
 
     Animated.spring(heartScale, {
@@ -51,6 +125,60 @@ export default function ParkingSpotCard({
       tension: 180,
       useNativeDriver: true,
     }).start();
+  };
+
+  const toggleFavorite = async () => {
+    if (isSaving) return;
+
+    if (!hasValidSpotId || !spot.id) {
+      Alert.alert(
+        'Cannot save this spot',
+        'This parking spot is temporarily unavailable for saving. Please try again later.'
+      );
+      return;
+    }
+
+    setIsSaving(true);
+
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) throw error;
+
+      if (!session?.access_token) {
+        Alert.alert(
+          'Sign in required',
+          'Please sign in to save your favourite parking spots.'
+        );
+        return;
+      }
+
+      const action = isSaved ? 'unsave' : 'save';
+
+      await toggleSavedSpot(
+        session.access_token,
+        spot.id,
+        action
+      );
+
+      const nextSavedState = !isSaved;
+
+      setIsSaved(nextSavedState);
+      onSavedChange?.(nextSavedState);
+      animateHeart();
+    } catch (error) {
+      console.error('Could not update saved spot:', error);
+
+      Alert.alert(
+        'Unable to update saved spots',
+        error instanceof Error ? error.message : 'Please try again.'
+      );
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const verificationTier =
@@ -91,15 +219,25 @@ export default function ParkingSpotCard({
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={
-            isFavorite ? 'Remove from favorites' : 'Add to favorites'
+            !hasValidSpotId
+              ? 'This parking spot cannot currently be saved'
+              : isSaved
+                ? 'Remove from saved spots'
+                : 'Save this spot'
           }
-          accessibilityState={{ selected: isFavorite }}
+          accessibilityState={{
+            selected: isSaved,
+            disabled: isSaving || !hasValidSpotId,
+          }}
           hitSlop={8}
+          disabled={isSaving || !hasValidSpotId}
           onPress={toggleFavorite}
           style={({ pressed }) => [
             styles.favoriteButton,
-            isFavorite && styles.favoriteButtonActive,
+            isSaved && styles.favoriteButtonActive,
             pressed && styles.favoriteButtonPressed,
+            (isSaving || !hasValidSpotId) &&
+              styles.favoriteButtonDisabled,
           ]}
         >
           <Animated.View
@@ -107,16 +245,14 @@ export default function ParkingSpotCard({
               transform: [{ scale: heartScale }],
             }}
           >
-            <Svg width={25} height={25} viewBox="0 0 24 24">
-              <Path
-                d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78Z"
-                fill={isFavorite ? colors.error : 'none'}
-                stroke={isFavorite ? colors.error : colors.text}
-                strokeWidth={1.8}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              />
-            </Svg>
+            <Text
+              style={[
+                styles.favoriteIcon,
+                isSaved && styles.favoriteIconActive,
+              ]}
+            >
+              {isSaved ? '♥' : '♡'}
+            </Text>
           </Animated.View>
         </Pressable>
 
@@ -125,16 +261,13 @@ export default function ParkingSpotCard({
             {spot.name}
           </Text>
 
-          <Text style={styles.location}>
-            Parking location
-          </Text>
+          <Text style={styles.location}>Parking location</Text>
 
           <View style={styles.separator} />
 
           <View style={styles.bottomRow}>
             <View style={styles.priceContainer}>
               <Text style={styles.priceLabel}>PARKING RATE</Text>
-
               <Text style={styles.price} numberOfLines={1}>
                 {spot.price_per_hour == null
                   ? 'Price unavailable'
@@ -178,21 +311,17 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 5,
   },
-
   cardPressed: {
     transform: [{ scale: 0.985 }],
   },
-
   image: {
     flex: 1,
     justifyContent: 'flex-end',
     backgroundColor: colors.textSecondary,
   },
-
   imageStyle: {
     borderRadius: 23,
   },
-
   badgePosition: {
     position: 'absolute',
     top: 12,
@@ -201,7 +330,6 @@ const styles = StyleSheet.create({
     elevation: 3,
     maxWidth: '72%',
   },
-
   favoriteButton: {
     position: 'absolute',
     top: 12,
@@ -216,22 +344,29 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
   },
-
   favoriteButtonActive: {
     backgroundColor: colors.favoriteBackground,
     borderColor: colors.favoriteBorder,
   },
-
   favoriteButtonPressed: {
     opacity: 0.82,
   },
-
+  favoriteButtonDisabled: {
+    opacity: 0.6,
+  },
+  favoriteIcon: {
+    fontSize: 27,
+    lineHeight: 32,
+    color: colors.textSecondary,
+  },
+  favoriteIconActive: {
+    color: colors.error,
+  },
   content: {
     paddingHorizontal: 18,
     paddingTop: 12,
     paddingBottom: 15,
   },
-
   name: {
     color: colors.white,
     fontSize: 23,
@@ -239,45 +374,38 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.bold,
     letterSpacing: -0.4,
   },
-
   location: {
     marginTop: 3,
     color: colors.overlayText,
     fontSize: 13,
   },
-
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.overlaySurfaceBorder,
     marginVertical: 11,
   },
-
   bottomRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 8,
   },
-
   priceContainer: {
     flex: 1,
     gap: 4,
     minWidth: 0,
   },
-
   priceLabel: {
     color: colors.overlayText,
     fontSize: 9,
     fontWeight: fontWeight.bold,
     letterSpacing: 1.1,
   },
-
   price: {
     color: colors.white,
     fontSize: 14,
     fontWeight: fontWeight.semibold,
   },
-
   directionsButton: {
     backgroundColor: colors.surface,
     borderRadius: 999,
@@ -285,13 +413,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     flexShrink: 0,
   },
-
   directionsText: {
     color: colors.text,
     fontSize: 12,
     fontWeight: fontWeight.bold,
   },
-
   buttonPressed: {
     opacity: 0.78,
   },
