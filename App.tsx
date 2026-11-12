@@ -7,6 +7,9 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import MainTabNavigator from './navigation/MainTabNavigator';
 
 import ParkingDetailsScreen from './screens/ParkingDetailsScreen';
+import ParkingHistoryScreen from './screens/ParkingHistoryScreen';
+import ActiveParkingScreen from './screens/ActiveParkingScreen';
+import ProfileScreen from './screens/ProfileScreen';
 import ClaimSpotScreen from './screens/ClaimSpotScreen';
 import EmailLoginScreen from './screens/EmailLoginScreen';
 import MyListingsScreen from './screens/MyListingsScreen';
@@ -14,11 +17,17 @@ import ThemeTestScreen from './screens/ThemeTestScreen';
 import ReportIssueScreen from './screens/ReportIssueScreen';
 
 import type { ParkingSpot } from './types/parking';
+import type { ParkingHistoryItem } from './lib/api';
 import { ThemeProvider } from './contexts/ThemeContext';
 
 export type RootStackParamList = {
   MainTabs: undefined;
   ParkingDetails: { spot: ParkingSpot };
+  ParkingHistory: undefined;
+  ActiveParking: {
+    session: ParkingHistoryItem;
+  };
+  Profile: undefined;
   ClaimSpot: { spot: ParkingSpot };
   ReportIssue: { spot: ParkingSpot };
   EmailLogin: {
@@ -55,6 +64,18 @@ export default function App() {
               <Stack.Screen
                 name="ParkingDetails"
                 component={ParkingDetailsScreen}
+              />
+              <Stack.Screen
+                name="ParkingHistory"
+                component={ParkingHistoryScreen}
+              />
+              <Stack.Screen
+                name="ActiveParking"
+                component={ActiveParkingScreen}
+              />
+              <Stack.Screen
+                name="Profile"
+                component={ProfileScreen}
               />
               <Stack.Screen
                 name="ClaimSpot"
