@@ -16,7 +16,12 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { MainTabParamList } from '../navigation/MainTabNavigator';
 import type { RootStackParamList } from '../App';
 
-import { getParkingHistory, type ParkingHistoryItem } from '../lib/api';
+import {
+  getParkingHistory,
+  getSpendSummary,
+  type ParkingHistoryItem,
+  type SpendSummary,
+} from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import { spacing, fontWeight } from '../constants/tokens';
@@ -62,6 +67,7 @@ export default function ParkingHistoryScreen() {
 
   const navigation = useNavigation<Props>();
   const [history, setHistory] = useState<ParkingHistoryItem[]>([]);
+  const [spendSummary, setSpendSummary] = useState<SpendSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [isSignedIn, setIsSignedIn] = useState(false);
@@ -87,6 +93,7 @@ export default function ParkingHistoryScreen() {
       if (!session?.access_token) {
         setIsSignedIn(false);
         setHistory([]);
+        setSpendSummary(null);
         return;
       }
 
@@ -94,6 +101,14 @@ export default function ParkingHistoryScreen() {
 
       const result = await getParkingHistory(session.access_token);
       setHistory(result);
+
+      try {
+        const spendResult = await getSpendSummary(session.access_token);
+        setSpendSummary(spendResult);
+      } catch (spendError) {
+        console.warn('Unable to load spend summary:', spendError);
+        setSpendSummary(null);
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -231,6 +246,92 @@ export default function ParkingHistoryScreen() {
     );
   };
 
+  const renderSpendSummary = () => {
+    if (!spendSummary) return null;
+
+    const difference = spendSummary.month_over_month_diff;
+    const differenceColor =
+      difference > 0 ? '#16A34A' : difference < 0 ? '#DC2626' : colors.textSecondary;
+
+    return (
+      <View
+        style={[
+          styles.spendCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Text style={[styles.spendCardTitle, { color: colors.text }]}>
+          Monthly spending
+        </Text>
+
+        <Text style={[styles.spendLabel, { color: colors.textSecondary }]}>
+          Total this month
+        </Text>
+
+        <Text style={[styles.spendTotal, { color: colors.text }]}>
+          ₹{spendSummary.total_this_month.toFixed(2)}
+        </Text>
+
+        <Text style={[styles.spendSessions, { color: colors.textSecondary }]}>
+          {spendSummary.sessions_this_month} sessions this month
+        </Text>
+
+        {spendSummary.total_last_month !== 0 && (
+          <Text style={[styles.monthComparison, { color: differenceColor }]}>
+            {difference > 0
+              ? `Up ₹${difference.toFixed(2)} from last month`
+              : difference < 0
+                ? `Down ₹${Math.abs(difference).toFixed(2)} from last month`
+                : 'No change from last month'}
+          </Text>
+        )}
+
+        {spendSummary.area_breakdown.length > 0 && (
+          <>
+            <View
+              style={[
+                styles.divider,
+                { backgroundColor: colors.border },
+              ]}
+            />
+
+            <Text style={[styles.areaTitle, { color: colors.text }]}>
+              Spending by area
+            </Text>
+
+            {spendSummary.area_breakdown.map((item, index) => (
+              <View
+                key={`${item.area}-${index}`}
+                style={styles.areaRow}
+              >
+                <View style={styles.areaInfo}>
+                  <Text style={[styles.areaName, { color: colors.text }]}>
+                    {item.area}
+                  </Text>
+                  <Text
+                    style={[
+                      styles.areaSessions,
+                      { color: colors.textSecondary },
+                    ]}
+                  >
+                    {item.sessions} sessions
+                  </Text>
+                </View>
+
+                <Text style={[styles.areaTotal, { color: colors.text }]}>
+                  ₹{item.total.toFixed(2)}
+                </Text>
+              </View>
+            ))}
+          </>
+        )}
+      </View>
+    );
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={styles.header}>
@@ -292,6 +393,8 @@ export default function ParkingHistoryScreen() {
             />
           }
         >
+          {renderSpendSummary()}
+
           <View style={styles.summaryRow}>
             <View
               style={[
@@ -385,6 +488,61 @@ const styles = StyleSheet.create({
   },
   stateText: {
     fontSize: 14,
+  },
+  spendCard: {
+    padding: spacing.md,
+    borderRadius: 18,
+    borderWidth: 1,
+    marginBottom: spacing.lg,
+  },
+  spendCardTitle: {
+    fontSize: 16,
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing.md,
+  },
+  spendLabel: {
+    fontSize: 12,
+  },
+  spendTotal: {
+    fontSize: 28,
+    fontWeight: fontWeight.bold,
+    marginTop: 4,
+  },
+  spendSessions: {
+    fontSize: 12,
+    marginTop: 4,
+  },
+  monthComparison: {
+    fontSize: 13,
+    fontWeight: fontWeight.semibold,
+    marginTop: spacing.sm,
+  },
+  areaTitle: {
+    fontSize: 14,
+    fontWeight: fontWeight.semibold,
+    marginBottom: spacing.sm,
+  },
+  areaRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.md,
+    paddingVertical: spacing.sm,
+  },
+  areaInfo: {
+    flex: 1,
+    gap: 3,
+  },
+  areaName: {
+    fontSize: 13,
+    fontWeight: fontWeight.medium,
+  },
+  areaSessions: {
+    fontSize: 11,
+  },
+  areaTotal: {
+    fontSize: 13,
+    fontWeight: fontWeight.semibold,
   },
   summaryRow: {
     flexDirection: 'row',

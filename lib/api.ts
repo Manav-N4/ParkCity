@@ -99,6 +99,24 @@ export type ParkingHistoryItem = {
   } | null;
 };
 
+// ------------------------------------------
+// SPEND SUMMARY — STORY 6C
+// ------------------------------------------
+
+export type SpendAreaBreakdown = {
+  area: string;
+  sessions: number;
+  total: number;
+};
+
+export type SpendSummary = {
+  total_this_month: number;
+  sessions_this_month: number;
+  total_last_month: number;
+  month_over_month_diff: number;
+  area_breakdown: SpendAreaBreakdown[];
+};
+
 async function getErrorMessage(
   response: Response,
   fallback: string
@@ -198,6 +216,28 @@ export async function getParkingHistory(
       await getErrorMessage(
         response,
         `Failed to fetch parking history: ${response.status}`
+      )
+    );
+  }
+
+  return response.json();
+}
+
+export async function getSpendSummary(
+  accessToken: string
+): Promise<SpendSummary> {
+  const response = await fetch(`${API_BASE_URL}/spend`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        `Failed to fetch spend summary: ${response.status}`
       )
     );
   }
