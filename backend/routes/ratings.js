@@ -23,14 +23,20 @@ router.post('/', async (req, res) => {
       .eq('user_id', user_id)
       .maybeSingle()
 
-    if (sessionError) throw sessionError
+    if (sessionError) {
+      console.error('db error:', sessionError)
+      throw new Error('Something went wrong')
+    }
     if (!session) return res.status(404).json({ error: 'Session not found' })
 
     const { error } = await supabase
       .from('satisfaction_ratings')
       .insert({ spot_id, user_id, session_id, rating, comment: comment ?? null })
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true })
   } catch (error) {

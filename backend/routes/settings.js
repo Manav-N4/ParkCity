@@ -20,7 +20,10 @@ router.post('/notifications', async (req, res) => {
       .update(updates)
       .eq('id', user_id)
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true })
   } catch (error) {

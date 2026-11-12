@@ -24,7 +24,10 @@ router.post('/update', async (req, res) => {
       .eq('status', 'approved')
       .maybeSingle()
 
-    if (ownerError) throw ownerError
+    if (ownerError) {
+      console.error('db error:', ownerError)
+      throw new Error('Something went wrong')
+    }
 
     if (!ownership) {
       return res.status(403).json({ error: 'You do not own this spot' })
@@ -43,7 +46,10 @@ router.post('/update', async (req, res) => {
         { onConflict: 'spot_id' }
       )
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true })
   } catch (error) {

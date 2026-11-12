@@ -14,7 +14,10 @@ router.post('/upsert', async (req, res) => {
       .from('profiles')
       .upsert({ id: user_id, name, email }, { onConflict: 'id' })
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true })
   } catch (error) {
@@ -33,7 +36,10 @@ router.get('/:user_id', async (req, res) => {
       .eq('id', user_id)
       .maybeSingle()
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json(data ?? null)
   } catch (error) {

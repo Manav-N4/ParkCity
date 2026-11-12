@@ -14,7 +14,10 @@ router.get('/:spot_id', async (req, res) => {
       .lte('valid_from', now)
       .gte('valid_until', now)
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json(data || [])
   } catch (error) {
@@ -42,7 +45,10 @@ router.post('/redeem', async (req, res) => {
       .gte('valid_until', now)
       .maybeSingle()
 
-    if (dealError) throw dealError
+    if (dealError) {
+      console.error('db error:', dealError)
+      throw new Error('Something went wrong')
+    }
     if (!deal) return res.status(404).json({ error: 'Deal not found or expired' })
 
     // generate unique code server-side
@@ -52,7 +58,10 @@ router.post('/redeem', async (req, res) => {
       .from('deal_redemptions')
       .insert({ deal_id, user_id, spot_id, redemption_code })
 
-    if (insertError) throw insertError
+    if (insertError) {
+      console.error('db error:', insertError)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true, redemption_code })
   } catch (error) {

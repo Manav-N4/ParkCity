@@ -16,7 +16,10 @@ router.post('/view', async (req, res) => {
       .from('view_events')
       .insert({ spot_id, user_id })
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true })
   } catch (error) {
@@ -37,7 +40,10 @@ router.get('/owner', async (req, res) => {
       .eq('user_id', user_id)
       .eq('status', 'approved')
 
-    if (ownerError) throw ownerError
+    if (ownerError) {
+      console.error('db error:', ownerError)
+      throw new Error('Something went wrong')
+    }
 
     if (!ownedSpots || ownedSpots.length === 0) {
       return res.json([])
@@ -53,7 +59,10 @@ router.get('/owner', async (req, res) => {
       .in('spot_id', spotIds)
       .gte('viewed_at', startOfMonth)
 
-    if (viewError) throw viewError
+    if (viewError) {
+      console.error('db error:', viewError)
+      throw new Error('Something went wrong')
+    }
 
     // navigations this month
     const { data: navigations, error: navError } = await supabase
@@ -62,7 +71,10 @@ router.get('/owner', async (req, res) => {
       .in('spot_id', spotIds)
       .gte('navigated_at', startOfMonth)
 
-    if (navError) throw navError
+    if (navError) {
+      console.error('db error:', navError)
+      throw new Error('Something went wrong')
+    }
 
     // aggregate per spot
     const statsMap = {}

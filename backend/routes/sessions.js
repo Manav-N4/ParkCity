@@ -47,7 +47,10 @@ router.post('/checkin', async (req, res) => {
       .is('checked_out_at', null)
       .maybeSingle()
 
-    if (existingError) throw existingError
+    if (existingError) {
+      console.error('db error:', existingError)
+      throw new Error('Something went wrong')
+    }
 
     if (existing) {
       return res.status(409).json({ error: 'You already have an active parking session' })
@@ -59,7 +62,10 @@ router.post('/checkin', async (req, res) => {
       .select('id, checked_in_at')
       .single()
 
-    if (insertError) throw insertError
+    if (insertError) {
+      console.error('db error:', insertError)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true, session_id: session.id, checked_in_at: session.checked_in_at })
   } catch (error) {
@@ -86,7 +92,10 @@ router.post('/checkout', async (req, res) => {
       .is('checked_out_at', null)
       .maybeSingle()
 
-    if (sessionError) throw sessionError
+    if (sessionError) {
+      console.error('db error:', sessionError)
+      throw new Error('Something went wrong')
+    }
 
     if (!session) {
       return res.status(404).json({ error: 'Active session not found' })
@@ -110,7 +119,10 @@ router.post('/checkout', async (req, res) => {
       })
       .eq('id', session_id)
 
-    if (updateError) throw updateError
+    if (updateError) {
+      console.error('db error:', updateError)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true, duration_minutes, estimated_cost })
   } catch (error) {
@@ -129,7 +141,10 @@ router.get('/history', async (req, res) => {
       .eq('user_id', user_id)
       .order('checked_in_at', { ascending: false })
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json(data || [])
   } catch (error) {

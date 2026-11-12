@@ -15,7 +15,10 @@ router.post('/', async (req, res) => {
       .from('navigation_events')
       .insert({ spot_id, user_id })
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true })
   } catch (error) {

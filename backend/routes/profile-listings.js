@@ -11,7 +11,10 @@ router.get('/listings', async (req, res) => {
       .select('spot_id, status')
       .eq('user_id', user_id)
 
-    if (ownerError) throw ownerError
+    if (ownerError) {
+      console.error('db error:', ownerError)
+      throw new Error('Something went wrong')
+    }
 
     if (!ownedSpots || ownedSpots.length === 0) {
       return res.json([])
@@ -23,14 +26,20 @@ router.get('/listings', async (req, res) => {
     const { data: spots, error: spotsError } = await supabase
       .rpc('get_parking_spots_by_ids', { spot_uuids: spotIds })
 
-    if (spotsError) throw spotsError
+    if (spotsError) {
+      console.error('db error:', spotsError)
+      throw new Error('Something went wrong')
+    }
 
     const { data: attributes, error: attrError } = await supabase
       .from('parking_spot_attributes')
       .select('spot_id, field_name, value, source, suppressed')
       .in('spot_id', spotIds)
 
-    if (attrError) throw attrError
+    if (attrError) {
+      console.error('db error:', attrError)
+      throw new Error('Something went wrong')
+    }
 
     const SOURCE_PRECEDENCE = ['field_verified', 'owner_verified', 'crowd_verified', 'google_raw']
 
@@ -76,7 +85,10 @@ router.post('/update', async (req, res) => {
       .update(updates)
       .eq('id', user_id)
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true })
   } catch (error) {

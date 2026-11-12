@@ -16,7 +16,10 @@ router.post('/token', async (req, res) => {
       .update({ push_token })
       .eq('id', user_id)
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true })
   } catch (error) {
@@ -42,7 +45,10 @@ router.post('/set', async (req, res) => {
       .eq('user_id', user_id)
       .maybeSingle()
 
-    if (sessionError) throw sessionError
+    if (sessionError) {
+      console.error('db error:', sessionError)
+      throw new Error('Something went wrong')
+    }
 
     if (!session) {
       return res.status(404).json({ error: 'Session not found' })
@@ -53,7 +59,10 @@ router.post('/set', async (req, res) => {
       .update({ reminder_minutes_before })
       .eq('id', session_id)
 
-    if (error) throw error
+    if (error) {
+      console.error('db error:', error)
+      throw new Error('Something went wrong')
+    }
 
     return res.json({ success: true })
   } catch (error) {
