@@ -1,5 +1,5 @@
 
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 import {
   Pressable,
   ScrollView,
@@ -9,7 +9,10 @@ import {
 } from 'react-native';
 import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
-import type { CompositeScreenProps } from '@react-navigation/native';
+import {
+  useFocusEffect,
+  type CompositeScreenProps,
+} from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
@@ -27,7 +30,10 @@ import {
 import {
   getPlaceDetails,
   searchNearbyParking,
+  getParkingHistory,
+  type ParkingHistoryItem,
 } from '../lib/api';
+import { supabase } from '../lib/supabase';
 import { ParkingSpot } from '../types/parking';
 
 type Props = CompositeScreenProps<
@@ -67,6 +73,41 @@ export default function HomeScreen({ navigation }: Props) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+
+  const [activeSession, setActiveSession] =
+    useState<ParkingHistoryItem | null>(null);
+
+  const loadActiveSession = useCallback(async () => {
+    try {
+      const {
+        data: { session },
+        error,
+      } = await supabase.auth.getSession();
+
+      if (error) throw error;
+
+      if (!session?.access_token) {
+        setActiveSession(null);
+        return;
+      }
+
+      const history = await getParkingHistory(session.access_token);
+
+      const active = history.find(
+        (item) => item.checked_out_at === null
+      );
+
+      setActiveSession(active ?? null);
+    } catch (error) {
+      console.error('Could not load active parking session:', error);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      void loadActiveSession();
+    }, [loadActiveSession])
+  );
 
   const handleSearchByPlace = async (
     placeId: string,
@@ -152,164 +193,197 @@ export default function HomeScreen({ navigation }: Props) {
   const showResults = hasSearched;
 
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={styles.content}
-      showsVerticalScrollIndicator={false}
-    >
-      {!showResults && (
-        <>
-          <View style={styles.topSearchRow}>
-            <View style={styles.searchBarContainer}>
-              <SearchBar onSelectSuggestion={handleSelectSuggestion} />
-            </View>
-
-            <Pressable
-              onPress={() => navigation.navigate('MyListings')}
-              style={({ pressed }) => [
-                styles.profileButton,
-                pressed && styles.profileButtonPressed,
-              ]}
-              accessibilityRole="button"
-              accessibilityLabel="My listings"
-            >
-              <Text style={styles.profileInitial}>A</Text>
-            </Pressable>
-          </View>
-
-          <View style={styles.destinationsSection}>
-            <View style={styles.sectionHeading}>
-              <View style={styles.sectionTitleGroup}>
-                <Text style={styles.sectionTitle}>
-                  Popular in Bengaluru
-                </Text>
-                <Text style={styles.sectionSubtitle}>
-                  Find your next destination.
-                </Text>
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
+      >
+        {!showResults && (
+          <>
+            <View style={styles.topSearchRow}>
+              <View style={styles.searchBarContainer}>
+                <SearchBar onSelectSuggestion={handleSelectSuggestion} />
               </View>
-              <Text style={styles.cityLabel}>BLR</Text>
+
+              <Pressable
+                onPress={() => navigation.navigate('Profile')}
+                style={({ pressed }) => [
+                  styles.profileButton,
+                  pressed && styles.profileButtonPressed,
+                ]}
+                accessibilityRole="button"
+                accessibilityLabel="Profile"
+              >
+                <Text style={styles.profileInitial}>A</Text>
+              </Pressable>
             </View>
 
-            <View style={styles.destinationList}>
-              {destinations.map((destination) => (
-                <Pressable
-                  key={destination.number}
-                  onPress={() => handleSelectDestination(destination)}
-                  disabled={loading}
-                  style={({ pressed }) => [
-                    styles.destinationCard,
-                    destination.size === 'large'
-                      ? styles.destinationLarge
-                      : styles.destinationSmall,
-                    pressed && styles.destinationCardPressed,
-                  ]}
-                >
-                  <Image
-                    source={destination.image}
-                    style={StyleSheet.absoluteFill}
-                    contentFit="cover"
-                    transition={250}
-                  />
+            <View style={styles.destinationsSection}>
+              <View style={styles.sectionHeading}>
+                <View style={styles.sectionTitleGroup}>
+                  <Text style={styles.sectionTitle}>
+                    Popular in Bengaluru
+                  </Text>
+                  <Text style={styles.sectionSubtitle}>
+                    Find your next destination.
+                  </Text>
+                </View>
+                <Text style={styles.cityLabel}>BLR</Text>
+              </View>
 
-                  <LinearGradient
-                    colors={[
-                      'rgba(10,18,14,0.02)',
-                      'rgba(10,18,14,0.18)',
-                      'rgba(10,18,14,0.94)',
+              <View style={styles.destinationList}>
+                {destinations.map((destination) => (
+                  <Pressable
+                    key={destination.number}
+                    onPress={() => handleSelectDestination(destination)}
+                    disabled={loading}
+                    style={({ pressed }) => [
+                      styles.destinationCard,
+                      destination.size === 'large'
+                        ? styles.destinationLarge
+                        : styles.destinationSmall,
+                      pressed && styles.destinationCardPressed,
                     ]}
-                    locations={[0.15, 0.5, 1]}
-                    start={{ x: 0.5, y: 0 }}
-                    end={{ x: 0.5, y: 1 }}
-                    pointerEvents="none"
-                    style={StyleSheet.absoluteFill}
-                  />
+                  >
+                    <Image
+                      source={destination.image}
+                      style={StyleSheet.absoluteFill}
+                      contentFit="cover"
+                      transition={250}
+                    />
 
-                  <View style={styles.destinationNumber}>
-                    <Text style={styles.destinationNumberText}>
-                      {destination.number}
-                    </Text>
-                  </View>
+                    <LinearGradient
+                      colors={[
+                        'rgba(10,18,14,0.02)',
+                        'rgba(10,18,14,0.18)',
+                        'rgba(10,18,14,0.94)',
+                      ]}
+                      locations={[0.15, 0.5, 1]}
+                      start={{ x: 0.5, y: 0 }}
+                      end={{ x: 0.5, y: 1 }}
+                      pointerEvents="none"
+                      style={StyleSheet.absoluteFill}
+                    />
 
-                  <View style={styles.destinationBottom}>
-                    <Text
-                      style={styles.destinationName}
-                      numberOfLines={2}
-                    >
-                      {destination.name}
-                    </Text>
-                    <Text style={styles.destinationArea}>
-                      {destination.area}
-                    </Text>
-                  </View>
+                    <View style={styles.destinationNumber}>
+                      <Text style={styles.destinationNumberText}>
+                        {destination.number}
+                      </Text>
+                    </View>
 
-                  <View style={styles.destinationArrow}>
-                    <Text style={styles.destinationArrowText}>↗</Text>
-                  </View>
-                </Pressable>
-              ))}
+                    <View style={styles.destinationBottom}>
+                      <Text
+                        style={styles.destinationName}
+                        numberOfLines={2}
+                      >
+                        {destination.name}
+                      </Text>
+                      <Text style={styles.destinationArea}>
+                        {destination.area}
+                      </Text>
+                    </View>
+
+                    <View style={styles.destinationArrow}>
+                      <Text style={styles.destinationArrowText}>↗</Text>
+                    </View>
+                  </Pressable>
+                ))}
+              </View>
             </View>
-          </View>
+          </>
+        )}
 
+        {showResults && (
+          <View style={styles.resultsSection}>
+            <Pressable
+              onPress={handleBackToHome}
+              disabled={loading}
+              style={styles.backButton}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Home"
+            >
+              <Text style={styles.backButtonText}>←</Text>
+              <Text style={styles.backButtonLabel}>
+                Back to Home
+              </Text>
+            </Pressable>
 
-        </>
-      )}
-
-      {showResults && (
-        <View style={styles.resultsSection}>
-          <Pressable
-            onPress={handleBackToHome}
-            disabled={loading}
-            style={styles.backButton}
-            accessibilityRole="button"
-            accessibilityLabel="Back to Home"
-          >
-            <Text style={styles.backButtonText}>←</Text>
-            <Text style={styles.backButtonLabel}>
-              Back to Home
+            <Text style={styles.resultsTitle}>
+              Parking near your destination
             </Text>
-          </Pressable>
 
-          <Text style={styles.resultsTitle}>
-            Parking near your destination
-          </Text>
-
-          {loading && (
-            <View style={styles.loadingState}>
-              <Text style={styles.stateText}>
-                Finding parking for you...
-              </Text>
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-              <SkeletonCard />
-            </View>
-          )}
-
-          {!!error && (
-            <Text style={styles.errorText}>{error}</Text>
-          )}
-
-          {!loading &&
-            !error &&
-            parkingSpots.length === 0 && (
-              <Text style={styles.stateText}>
-                No parking options found for this destination.
-              </Text>
+            {loading && (
+              <View style={styles.loadingState}>
+                <Text style={styles.stateText}>
+                  Finding parking for you...
+                </Text>
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+                <SkeletonCard />
+              </View>
             )}
 
-          {!loading &&
-            !error &&
-            parkingSpots.map((spot) => (
-              <ParkingSpotCard
-                key={spot.google_place_id}
-                spot={spot}
-                navigation={navigation}
-              />
-            ))}
-        </View>
+            {!!error && (
+              <Text style={styles.errorText}>{error}</Text>
+            )}
+
+            {!loading &&
+              !error &&
+              parkingSpots.length === 0 && (
+                <Text style={styles.stateText}>
+                  No parking options found for this destination.
+                </Text>
+              )}
+
+            {!loading &&
+              !error &&
+              parkingSpots.map((spot) => (
+                <ParkingSpotCard
+                  key={spot.google_place_id}
+                  spot={spot}
+                  navigation={navigation}
+                />
+              ))}
+          </View>
+        )}
+      </ScrollView>
+
+      {activeSession && (
+        <Pressable
+          onPress={() =>
+            navigation.navigate('ActiveParking', {
+              session: activeSession,
+            })
+          }
+          style={({ pressed }) => [
+            styles.activeParkingBubble,
+            pressed && styles.activeParkingBubblePressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="View your active parking session"
+        >
+          <View style={styles.activeParkingIndicator} />
+
+          <View style={styles.activeParkingBubbleContent}>
+            <Text style={styles.activeParkingBubbleTitle}>
+              CURRENTLY PARKED
+            </Text>
+
+            <Text
+              style={styles.activeParkingBubbleName}
+              numberOfLines={1}
+            >
+              {activeSession.parking_spots?.name ?? 'Parking location'}
+            </Text>
+          </View>
+
+          <Text style={styles.activeParkingArrow}>↗</Text>
+        </Pressable>
       )}
-    </ScrollView>
+    </View>
   );
 }
 
@@ -319,9 +393,13 @@ const styles = StyleSheet.create({
     backgroundColor: colors.background,
   },
 
+  scrollView: {
+    flex: 1,
+  },
+
   content: {
     paddingTop: 58,
-    paddingBottom: 36,
+    paddingBottom: 110,
   },
 
   header: {
@@ -471,6 +549,121 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.lg,
     marginTop: -14,
     zIndex: 5,
+  },
+
+  activeParkingCard: {
+    marginHorizontal: spacing.lg,
+    marginTop: spacing.lg,
+    padding: spacing.lg,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+
+  activeParkingCardPressed: {
+    opacity: 0.82,
+    transform: [{ scale: 0.99 }],
+  },
+
+  activeParkingTopRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.md,
+  },
+
+  activeParkingStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  activeParkingIndicator: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#27965C',
+  },
+
+  activeParkingEyebrow: {
+    color: '#27965C',
+    fontSize: 10,
+    letterSpacing: 1.2,
+    fontWeight: fontWeight.bold,
+  },
+
+  activeParkingArrow: {
+    color: colors.primary,
+    fontSize: 21,
+    lineHeight: 24,
+  },
+
+  activeParkingName: {
+    color: colors.text,
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: fontWeight.bold,
+  },
+
+  activeParkingAddress: {
+    color: colors.textSecondary,
+    fontSize: 13,
+    lineHeight: 19,
+    marginTop: 4,
+  },
+
+  activeParkingAction: {
+    color: colors.primary,
+    fontSize: 12,
+    fontWeight: fontWeight.semibold,
+    marginTop: spacing.md,
+  },
+
+  activeParkingBubble: {
+    position: 'absolute',
+    bottom: 12,
+    left: spacing.lg,
+    right: spacing.lg,
+    minHeight: 72,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    borderRadius: 20,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    elevation: 8,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 10,
+    zIndex: 20,
+  },
+
+  activeParkingBubblePressed: {
+    opacity: 0.85,
+    transform: [{ scale: 0.98 }],
+  },
+
+  activeParkingBubbleContent: {
+    flex: 1,
+    gap: 4,
+  },
+
+  activeParkingBubbleTitle: {
+    color: '#27965C',
+    fontSize: 9,
+    letterSpacing: 1.1,
+    fontWeight: fontWeight.bold,
+  },
+
+  activeParkingBubbleName: {
+    color: colors.text,
+    fontSize: 15,
+    fontWeight: fontWeight.semibold,
   },
 
   destinationsSection: {
