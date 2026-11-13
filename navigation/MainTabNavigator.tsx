@@ -1,8 +1,10 @@
+
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Text } from 'react-native';
 
 import HomeScreen from '../screens/HomeScreen';
 import SavedScreen from '../screens/SavedScreen';
+
 import { colors, fontWeight } from '../constants/tokens';
 
 export type MainTabParamList = {
