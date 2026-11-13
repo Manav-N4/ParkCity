@@ -1,3 +1,4 @@
+
 {
   "expo": {
     "name": "parkcity",
@@ -31,6 +32,7 @@
     "plugins": [
       "expo-sqlite",
       "expo-image",
+      "expo-notifications",
       [
         "expo-image-picker",
         {
