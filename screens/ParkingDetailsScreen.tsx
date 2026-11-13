@@ -51,9 +51,6 @@ export default function ParkingDetailsScreen({
 }: Props) {
   const { spot } = route.params;
 
-  console.log('PARKING SPOT ID:', spot.id);
-  console.log('PARKING SPOT:', spot);
-
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
@@ -195,11 +192,6 @@ export default function ParkingDetailsScreen({
 
       const action = isSaved ? 'unsave' : 'save';
 
-      console.log('SAVED SPOT REQUEST:', {
-        spot_id: spot.id,
-        action,
-      });
-
       await toggleSavedSpot(
         session.access_token,
         spot.id,
@@ -283,9 +275,11 @@ export default function ParkingDetailsScreen({
 
       // CHECK-OUT
       if (sessionId) {
+        const completedSessionId = sessionId;
+
         const result = await checkOutFromSpot(
           session.access_token,
-          sessionId,
+          completedSessionId,
         );
 
         setSessionId(null);
@@ -300,6 +294,11 @@ export default function ParkingDetailsScreen({
         setToast({
           message: `Parking session ended. Duration: ${duration} minutes. ${cost}`,
           type: 'success',
+        });
+
+        navigation.navigate('Satisfaction', {
+          spotId: spot.id,
+          sessionId: completedSessionId,
         });
 
         return;
@@ -328,11 +327,6 @@ export default function ParkingDetailsScreen({
         location.coords.latitude,
         location.coords.longitude,
       );
-
-      // Temporary debugging logs. Never print the actual access token.
-      console.log('TEST TOKEN EXPIRY:', session.expires_at);
-      console.log('TEST TOKEN LENGTH:', session.access_token.length);
-      console.log('TEST SESSION ID:', result.session_id);
 
       // Navigate to the reminder screen after successful check-in.
       navigation.replace('SetReminder', {

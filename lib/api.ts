@@ -40,6 +40,8 @@ export type ListingDetails = {
   total_count: number | null;
   availability_updated_at: string | null;
   availability_status: 'live' | 'stale' | 'unconfirmed';
+  average_rating?: number | null;
+  rating_count?: number;
   attributes: {
     price_per_hour?: {
       value: string;
@@ -70,7 +72,7 @@ export type ReportIssuePayload = {
 };
 
 // ------------------------------------------
-// PARKING SESSIONS — STORY 6B
+// PARKING SESSIONS
 // ------------------------------------------
 
 export type CheckInResponse = {
@@ -100,7 +102,22 @@ export type ParkingHistoryItem = {
 };
 
 // ------------------------------------------
-// SPEND SUMMARY — STORY 6C
+// PARKING RATINGS
+// ------------------------------------------
+
+export type ParkingRatingPayload = {
+  spot_id: string;
+  session_id: string;
+  rating: number;
+  comment?: string | null;
+};
+
+export type ParkingRatingResponse = {
+  success: boolean;
+};
+
+// ------------------------------------------
+// SPEND SUMMARY
 // ------------------------------------------
 
 export type SpendAreaBreakdown = {
@@ -243,6 +260,41 @@ export async function getSpendSummary(
   }
 
   return response.json();
+}
+
+// ------------------------------------------
+// RATING SUBMISSION
+// ------------------------------------------
+
+export async function submitParkingRating(
+  accessToken: string,
+  ratingData: ParkingRatingPayload
+): Promise<ParkingRatingResponse> {
+  const response = await fetch(`${API_BASE_URL}/ratings`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify(ratingData),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        `Failed to submit rating: ${response.status}`
+      )
+    );
+  }
+
+  const result: ParkingRatingResponse = await response.json();
+
+  if (result.success !== true) {
+    throw new Error('The server did not confirm your rating submission.');
+  }
+
+  return result;
 }
 
 // ------------------------------------------
@@ -454,7 +506,7 @@ export async function updateSpotAvailability(
 }
 
 // ------------------------------------------
-// SAVED SPOTS — STORY 6A
+// SAVED SPOTS
 // ------------------------------------------
 
 export async function getSavedSpots(
@@ -525,7 +577,7 @@ export async function toggleSavedSpot(
 }
 
 // ------------------------------------------
-// PARKING REMINDERS — STORY 7A
+// PARKING REMINDERS
 // ------------------------------------------
 
 export async function setParkingReminder(

@@ -1,8 +1,13 @@
 
+import { useEffect, useRef, useState } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { NavigationContainer } from '@react-navigation/native';
+import {
+  NavigationContainer,
+  createNavigationContainerRef,
+} from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import * as Notifications from 'expo-notifications';
 
 import MainTabNavigator from './navigation/MainTabNavigator';
 
@@ -16,6 +21,9 @@ import MyListingsScreen from './screens/MyListingsScreen';
 import ThemeTestScreen from './screens/ThemeTestScreen';
 import ReportIssueScreen from './screens/ReportIssueScreen';
 import SetReminderScreen from './screens/SetReminderScreen';
+import SatisfactionScreen from './screens/SatisfactionScreen';
+
+import FeedbackBubble from './components/FeedbackBubble';
 
 import type { ParkingSpot } from './types/parking';
 import type { ParkingHistoryItem } from './lib/api';
@@ -36,6 +44,11 @@ export type RootStackParamList = {
     spotName: string;
     accessToken: string;
   };
+  Satisfaction: {
+    spotId: string;
+    sessionId: string;
+    isReminder?: boolean;
+  };
   EmailLogin: {
     next?:
       | {
@@ -53,12 +66,120 @@ export type RootStackParamList = {
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
+const navigationRef =
+  createNavigationContainerRef<RootStackParamList>();
+
+type SatisfactionNotificationData = {
+  spot_id?: string;
+  session_id?: string;
+};
+
+function handleNotificationResponse(
+  response: Notifications.NotificationResponse,
+) {
+  const data = response.notification.request.content
+    .data as SatisfactionNotificationData;
+
+  const spotId = data?.spot_id;
+  const sessionId = data?.session_id;
+
+  if (
+    typeof spotId !== 'string' ||
+    typeof sessionId !== 'string' ||
+    !spotId ||
+    !sessionId
+  ) {
+    console.warn('Invalid satisfaction notification data:', data);
+    return;
+  }
+
+  if (navigationRef.isReady()) {
+    navigationRef.navigate('Satisfaction', {
+      spotId,
+      sessionId,
+      isReminder: true,
+    });
+  }
+}
+
 export default function App() {
+  const pendingNotificationResponse =
+    useRef<Notifications.NotificationResponse | null>(null);
+
+  const [currentRouteName, setCurrentRouteName] =
+    useState<string | undefined>();
+
+  useEffect(() => {
+    // Handle notification taps while the app is already running.
+    const subscription =
+      Notifications.addNotificationResponseReceivedListener(
+        (response) => {
+          if (navigationRef.isReady()) {
+            handleNotificationResponse(response);
+          } else {
+            pendingNotificationResponse.current = response;
+          }
+        },
+      );
+
+    // Handle notification taps that launched the app from a closed state.
+    const checkInitialNotification = async () => {
+      try {
+        const response =
+          await Notifications.getLastNotificationResponseAsync();
+
+        if (response) {
+          if (navigationRef.isReady()) {
+            handleNotificationResponse(response);
+          } else {
+            pendingNotificationResponse.current = response;
+          }
+        }
+      } catch (error) {
+        console.error(
+          'Could not retrieve the initial notification response:',
+          error,
+        );
+      }
+    };
+
+    void checkInitialNotification();
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
+
+  const handleNavigationReady = () => {
+    if (pendingNotificationResponse.current) {
+      handleNotificationResponse(
+        pendingNotificationResponse.current,
+      );
+
+      pendingNotificationResponse.current = null;
+    }
+
+    const routeName = navigationRef.getCurrentRoute()?.name;
+
+    setCurrentRouteName(routeName);
+  };
+
+  // Track navigation changes to hide the bubble on Satisfaction.
+  const handleNavigationStateChange = () => {
+    const routeName = navigationRef.getCurrentRoute()?.name;
+
+    setCurrentRouteName(routeName);
+  };
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
         <>
-          <NavigationContainer>
+          <NavigationContainer
+            ref={navigationRef}
+            onReady={handleNavigationReady}
+            onStateChange={handleNavigationStateChange}
+          >
             <Stack.Navigator
               initialRouteName="MainTabs"
               screenOptions={{ headerShown: false }}
@@ -107,8 +228,21 @@ export default function App() {
                 name="SetReminder"
                 component={SetReminderScreen}
               />
+              <Stack.Screen
+                name="Satisfaction"
+                component={SatisfactionScreen}
+                options={{
+                  presentation: 'modal',
+                  headerShown: false,
+                }}
+              />
             </Stack.Navigator>
           </NavigationContainer>
+
+          {/* Global floating feedback bubble */}
+          <FeedbackBubble
+            hidden={currentRouteName === 'Satisfaction'}
+          />
 
           <StatusBar style="auto" />
         </>

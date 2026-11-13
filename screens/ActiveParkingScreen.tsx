@@ -97,7 +97,12 @@ export default function ActiveParkingScreen({
         [
           {
             text: 'Done',
-            onPress: () => navigation.goBack(),
+            onPress: () => {
+              navigation.navigate('Satisfaction', {
+                spotId: session.spot_id,
+                sessionId: session.id,
+              });
+            },
           },
         ],
       );
