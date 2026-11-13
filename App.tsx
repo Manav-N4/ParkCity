@@ -15,6 +15,7 @@ import EmailLoginScreen from './screens/EmailLoginScreen';
 import MyListingsScreen from './screens/MyListingsScreen';
 import ThemeTestScreen from './screens/ThemeTestScreen';
 import ReportIssueScreen from './screens/ReportIssueScreen';
+import SetReminderScreen from './screens/SetReminderScreen';
 
 import type { ParkingSpot } from './types/parking';
 import type { ParkingHistoryItem } from './lib/api';
@@ -30,6 +31,11 @@ export type RootStackParamList = {
   Profile: undefined;
   ClaimSpot: { spot: ParkingSpot };
   ReportIssue: { spot: ParkingSpot };
+  SetReminder: {
+    sessionId: string;
+    spotName: string;
+    accessToken: string;
+  };
   EmailLogin: {
     next?:
       | {
@@ -96,6 +102,10 @@ export default function App() {
               <Stack.Screen
                 name="ThemeTest"
                 component={ThemeTestScreen}
+              />
+              <Stack.Screen
+                name="SetReminder"
+                component={SetReminderScreen}
               />
             </Stack.Navigator>
           </NavigationContainer>

@@ -523,3 +523,34 @@ export async function toggleSavedSpot(
     );
   }
 }
+
+// ------------------------------------------
+// PARKING REMINDERS — STORY 7A
+// ------------------------------------------
+
+export async function setParkingReminder(
+  accessToken: string,
+  sessionId: string,
+  reminderMinutesBefore: number
+): Promise<void> {
+  const response = await fetch(`${API_BASE_URL}/reminders/set`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      session_id: sessionId,
+      reminder_minutes_before: reminderMinutesBefore,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        `Failed to set parking reminder: ${response.status}`
+      )
+    );
+  }
+}

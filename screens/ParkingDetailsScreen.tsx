@@ -1,3 +1,4 @@
+
 import {
   Alert,
   Linking,
@@ -328,12 +329,16 @@ export default function ParkingDetailsScreen({
         location.coords.longitude,
       );
 
-      setSessionId(result.session_id);
-      setActiveSessionSpotId(spot.id);
+      // Temporary debugging logs. Never print the actual access token.
+      console.log('TEST TOKEN EXPIRY:', session.expires_at);
+      console.log('TEST TOKEN LENGTH:', session.access_token.length);
+      console.log('TEST SESSION ID:', result.session_id);
 
-      setToast({
-        message: "You're checked in! Enjoy your parking.",
-        type: 'success',
+      // Navigate to the reminder screen after successful check-in.
+      navigation.replace('SetReminder', {
+        sessionId: result.session_id,
+        spotName: spot.name,
+        accessToken: session.access_token,
       });
     } catch (error) {
       console.error('Parking session action failed:', error);
