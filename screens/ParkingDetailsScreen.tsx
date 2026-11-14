@@ -18,6 +18,7 @@ import * as Location from 'expo-location';
 import type { RootStackParamList } from '../App';
 import VerificationBadge from '../components/VerificationBadge';
 import ToastMessage from '../components/ui/ToastMessage';
+import DealCard from '../components/DealCard';
 import {
   logNavigation,
   getSavedSpots,
@@ -25,6 +26,8 @@ import {
   toggleSavedSpot,
   checkInToSpot,
   checkOutFromSpot,
+  getSpotDeals,
+  type SpotDeal,
 } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import {
@@ -62,20 +65,31 @@ export default function ParkingDetailsScreen({
 
   const [toast, setToast] = useState<ToastState>(null);
 
-  const hasValidSpotId =
-    typeof spot.id === 'string' && spot.id.trim().length > 0;
+  // Story 8A: Deals state
+  const [deals, setDeals] = useState<SpotDeal[]>([]);
+  const [dealAccessToken, setDealAccessToken] = useState<string | null>(null);
+
+  // Narrow the nullable spot ID to string | null.
+  const validSpotId =
+    typeof spot.id === 'string' && spot.id.trim().length > 0
+      ? spot.id
+      : null;
+
+  const hasValidSpotId = validSpotId !== null;
 
   useFocusEffect(
     useCallback(() => {
       let isActive = true;
 
       const loadSpotAndSessionStatus = async () => {
-        if (!hasValidSpotId) {
+        if (!validSpotId) {
           if (isActive) {
             setIsSaved(false);
             setSessionId(null);
             setActiveSessionSpotId(null);
             setIsSessionStatusLoading(false);
+            setDeals([]);
+            setDealAccessToken(null);
           }
 
           console.warn(
@@ -86,6 +100,8 @@ export default function ParkingDetailsScreen({
 
         if (isActive) {
           setIsSessionStatusLoading(true);
+          setDeals([]);
+          setDealAccessToken(null);
         }
 
         try {
@@ -103,17 +119,21 @@ export default function ParkingDetailsScreen({
               setIsSaved(false);
               setSessionId(null);
               setActiveSessionSpotId(null);
+              setDeals([]);
+              setDealAccessToken(null);
             }
             return;
           }
 
+          const accessToken = session.access_token;
+
           const [savedSpots, sessionHistory] = await Promise.all([
-            getSavedSpots(session.access_token),
-            getParkingHistory(session.access_token),
+            getSavedSpots(accessToken),
+            getParkingHistory(accessToken),
           ]);
 
           const saved = savedSpots.some(
-            (savedSpot) => savedSpot.id === spot.id,
+            (savedSpot) => savedSpot.id === validSpotId,
           );
 
           const activeSession = sessionHistory.find(
@@ -124,11 +144,39 @@ export default function ParkingDetailsScreen({
             setIsSaved(saved);
             setActiveSessionSpotId(activeSession?.spot_id ?? null);
             setSessionId(
-              activeSession?.spot_id === spot.id ? activeSession.id : null,
+              activeSession?.spot_id === validSpotId
+                ? activeSession.id
+                : null,
             );
+            setDealAccessToken(accessToken);
+          }
+
+          // Fetch deals independently so a deals API failure
+          // does not affect the rest of the parking details screen.
+          try {
+            const spotDeals = await getSpotDeals(
+              validSpotId,
+              accessToken,
+            );
+
+            if (isActive) {
+              setDeals(spotDeals);
+            }
+          } catch (dealError) {
+            console.error(
+              '[ParkCity] Could not load deals:',
+              dealError,
+            );
+
+            if (isActive) {
+              setDeals([]);
+            }
           }
         } catch (error) {
-          console.error('Could not load saved status or active session:', error);
+          console.error(
+            'Could not load saved status or active session:',
+            error,
+          );
         } finally {
           if (isActive) {
             setIsSessionStatusLoading(false);
@@ -141,7 +189,7 @@ export default function ParkingDetailsScreen({
       return () => {
         isActive = false;
       };
-    }, [spot.id, hasValidSpotId]),
+    }, [validSpotId]),
   );
 
   const handleToggleSaved = async () => {
@@ -149,7 +197,7 @@ export default function ParkingDetailsScreen({
       return;
     }
 
-    if (!hasValidSpotId || !spot.id) {
+    if (!validSpotId) {
       Alert.alert(
         'Cannot save this spot',
         'This parking spot is temporarily unavailable for saving. Please try again later.',
@@ -194,7 +242,7 @@ export default function ParkingDetailsScreen({
 
       await toggleSavedSpot(
         session.access_token,
-        spot.id,
+        validSpotId,
         action,
       );
 
@@ -222,7 +270,11 @@ export default function ParkingDetailsScreen({
       return;
     }
 
-    if (activeSessionSpotId && activeSessionSpotId !== spot.id && !sessionId) {
+    if (
+      activeSessionSpotId &&
+      activeSessionSpotId !== validSpotId &&
+      !sessionId
+    ) {
       setToast({
         message:
           'You already have an active parking session at another spot. Check out there before checking in here.',
@@ -231,7 +283,7 @@ export default function ParkingDetailsScreen({
       return;
     }
 
-    if (!hasValidSpotId || !spot.id) {
+    if (!validSpotId) {
       setToast({
         message: 'This parking spot is currently unavailable for check-in.',
         type: 'error',
@@ -297,7 +349,7 @@ export default function ParkingDetailsScreen({
         });
 
         navigation.navigate('Satisfaction', {
-          spotId: spot.id,
+          spotId: validSpotId,
           sessionId: completedSessionId,
         });
 
@@ -323,7 +375,7 @@ export default function ParkingDetailsScreen({
 
       const result = await checkInToSpot(
         session.access_token,
-        spot.id,
+        validSpotId,
         location.coords.latitude,
         location.coords.longitude,
       );
@@ -353,8 +405,8 @@ export default function ParkingDetailsScreen({
     const url =
       `https://www.google.com/maps/dir/?api=1&destination=${spot.lat},${spot.lng}`;
 
-    if (spot.id) {
-      void logNavigation(spot.id).catch((error) => {
+    if (validSpotId) {
+      void logNavigation(validSpotId).catch((error) => {
         console.error('Could not log navigation:', error);
       });
     }
@@ -494,7 +546,7 @@ export default function ParkingDetailsScreen({
                 !hasValidSpotId ||
                 (
                   activeSessionSpotId !== null &&
-                  activeSessionSpotId !== spot.id &&
+                  activeSessionSpotId !== validSpotId &&
                   !sessionId
                 )
               ) && styles.actionButtonDisabled,
@@ -506,7 +558,7 @@ export default function ParkingDetailsScreen({
               !hasValidSpotId ||
               (
                 activeSessionSpotId !== null &&
-                activeSessionSpotId !== spot.id &&
+                activeSessionSpotId !== validSpotId &&
                 !sessionId
               )
             }
@@ -516,7 +568,8 @@ export default function ParkingDetailsScreen({
                 ? 'Checking session...'
                 : sessionId
                   ? "I've left"
-                  : activeSessionSpotId && activeSessionSpotId !== spot.id
+                  : activeSessionSpotId &&
+                    activeSessionSpotId !== validSpotId
                     ? 'Active session elsewhere'
                     : "I've parked here"
             }
@@ -528,7 +581,8 @@ export default function ParkingDetailsScreen({
                   ? 'Checking session...'
                   : sessionId
                     ? "I've left"
-                    : activeSessionSpotId && activeSessionSpotId !== spot.id
+                    : activeSessionSpotId &&
+                      activeSessionSpotId !== validSpotId
                       ? 'Active session elsewhere'
                       : "I've parked here"}
             </Text>
@@ -567,6 +621,24 @@ export default function ParkingDetailsScreen({
             </Text>
           </Pressable>
         </View>
+
+        {/* Story 8A: Deals & Redemption */}
+        {deals.length > 0 && dealAccessToken && validSpotId && (
+          <View style={styles.dealsSection}>
+            <Text style={styles.dealsHeading}>
+              Offers at this spot
+            </Text>
+
+            {deals.map((deal) => (
+              <DealCard
+                key={deal.id}
+                deal={deal}
+                spotId={validSpotId}
+                accessToken={dealAccessToken}
+              />
+            ))}
+          </View>
+        )}
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -716,5 +788,14 @@ const styles = StyleSheet.create({
     color: colors.error,
     fontSize: typography.small,
     fontWeight: fontWeight.semibold,
+  },
+  dealsSection: {
+    marginTop: spacing.xl,
+  },
+  dealsHeading: {
+    color: colors.text,
+    fontSize: typography.heading,
+    fontWeight: fontWeight.bold,
+    marginBottom: spacing.md,
   },
 });
