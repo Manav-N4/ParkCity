@@ -134,6 +134,27 @@ export type SpendSummary = {
   area_breakdown: SpendAreaBreakdown[];
 };
 
+// ------------------------------------------
+// SPOT DEALS
+// ------------------------------------------
+
+export type SpotDeal = {
+  id: string;
+  offer_text: string;
+  discount_label: string;
+  redemption_code_prefix: string;
+  valid_until: string;
+};
+
+export type RedeemDealResponse = {
+  success: boolean;
+  redemption_code: string;
+};
+
+// ------------------------------------------
+// ERROR HANDLING
+// ------------------------------------------
+
 async function getErrorMessage(
   response: Response,
   fallback: string
@@ -147,6 +168,10 @@ async function getErrorMessage(
     return responseText || fallback;
   }
 }
+
+// ------------------------------------------
+// PARKING SESSIONS
+// ------------------------------------------
 
 export async function checkInToSpot(
   accessToken: string,
@@ -605,4 +630,75 @@ export async function setParkingReminder(
       )
     );
   }
+}
+
+// ------------------------------------------
+// DEALS
+// ------------------------------------------
+
+export async function getSpotDeals(
+  spotId: string,
+  accessToken: string
+): Promise<SpotDeal[]> {
+  const response = await fetch(
+    `${API_BASE_URL}/deals/${encodeURIComponent(spotId)}`,
+    {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        `Failed to fetch deals: ${response.status}`
+      )
+    );
+  }
+
+  const result: SpotDeal[] = await response.json();
+
+  if (!Array.isArray(result)) {
+    throw new Error('The server returned an invalid deals response.');
+  }
+
+  return result;
+}
+
+export async function redeemDeal(
+  dealId: string,
+  spotId: string,
+  accessToken: string
+): Promise<RedeemDealResponse> {
+  const response = await fetch(`${API_BASE_URL}/deals/redeem`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${accessToken}`,
+    },
+    body: JSON.stringify({
+      deal_id: dealId,
+      spot_id: spotId,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      await getErrorMessage(
+        response,
+        `Failed to redeem deal: ${response.status}`
+      )
+    );
+  }
+
+  const result: RedeemDealResponse = await response.json();
+
+  if (result.success !== true || !result.redemption_code) {
+    throw new Error('The server did not return a valid redemption code.');
+  }
+
+  return result;
 }
