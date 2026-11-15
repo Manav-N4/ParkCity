@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 
 import type { RootStackParamList } from '../App';
 
+const ADMIN_EMAIL = 'nayakmanav04@gmail.com'
+
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import { spacing, fontWeight } from '../constants/tokens';
@@ -26,6 +28,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
   const [name, setName] = useState('ParkCity User');
   const [email, setEmail] = useState('');
+  const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [signingOut, setSigningOut] = useState(false);
 
@@ -42,6 +45,7 @@ export default function ProfileScreen({ navigation }: Props) {
 
       if (user) {
         setEmail(user.email ?? '');
+        setIsAdmin(user.email === ADMIN_EMAIL);
 
         const metadata = user.user_metadata ?? {};
 
@@ -248,6 +252,63 @@ export default function ProfileScreen({ navigation }: Props) {
           />
         </Pressable>
       </View>
+
+      {isAdmin && (
+        <>
+          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+            Admin
+          </Text>
+
+          <View
+            style={[
+              styles.menuCard,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+              },
+            ]}
+          >
+            <Pressable
+              style={styles.menuItem}
+              onPress={() => navigation.navigate('AdminPayments')}
+            >
+              <View
+                style={[
+                  styles.menuIcon,
+                  { backgroundColor: colors.primary + '18' },
+                ]}
+              >
+                <Ionicons
+                  name="card-outline"
+                  size={22}
+                  color={colors.primary}
+                />
+              </View>
+
+              <View style={styles.menuInfo}>
+                <Text style={[styles.menuTitle, { color: colors.text }]}>
+                  Merchant Payments
+                </Text>
+
+                <Text
+                  style={[
+                    styles.menuSubtitle,
+                    { color: colors.textSecondary },
+                  ]}
+                >
+                  Generate payment links for merchants
+                </Text>
+              </View>
+
+              <Ionicons
+                name="chevron-forward"
+                size={20}
+                color={colors.textSecondary}
+              />
+            </Pressable>
+          </View>
+        </>
+      )}
 
       <Pressable
         onPress={handleSignOut}
