@@ -19,6 +19,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../App';
 import type { MainTabParamList } from '../navigation/MainTabNavigator';
 import ParkingSpotCard from '../components/ParkingSpotCard';
+import SponsoredCard from '../components/SponsoredCard';
 import SearchBar, { Suggestion } from '../components/ui/SearchBar';
 import SkeletonCard from '../components/ui/SkeletonCard';
 import {
@@ -68,8 +69,17 @@ const destinations = [
   },
 ] as const;
 
+type SponsoredSpotData = {
+  id: string;
+  name: string;
+  address?: string | null;
+  price_per_hour?: number | null;
+  source?: string;
+};
+
 export default function HomeScreen({ navigation }: Props) {
   const [parkingSpots, setParkingSpots] = useState<ParkingSpot[]>([]);
+  const [sponsored, setSponsored] = useState<SponsoredSpotData | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
@@ -118,6 +128,7 @@ export default function HomeScreen({ navigation }: Props) {
       setLoading(true);
       setError(null);
       setParkingSpots([]);
+      setSponsored(null);
 
       const { lat, lng } = await getPlaceDetails(
         placeId,
@@ -129,6 +140,12 @@ export default function HomeScreen({ navigation }: Props) {
 
       if (Array.isArray(spots)) {
         setParkingSpots(spots as ParkingSpot[]);
+        const sponsoredData = (result as { sponsored?: unknown })?.sponsored;
+        setSponsored(
+          sponsoredData != null
+            ? (sponsoredData as SponsoredSpotData)
+            : null
+        );
       } else {
         console.error(
           'Unexpected parking search response:',
@@ -188,6 +205,7 @@ export default function HomeScreen({ navigation }: Props) {
     setParkingSpots([]);
     setError(null);
     setHasSearched(false);
+    setSponsored(null);
   };
 
   const showResults = hasSearched;
@@ -337,6 +355,15 @@ export default function HomeScreen({ navigation }: Props) {
                   No parking options found for this destination.
                 </Text>
               )}
+
+            {!loading && !error && sponsored && (
+              <SponsoredCard
+                spot={sponsored}
+                onPress={() =>
+                  navigation.navigate('SpotDetail', { spotId: sponsored.id })
+                }
+              />
+            )}
 
             {!loading &&
               !error &&
