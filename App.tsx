@@ -23,6 +23,7 @@ import ReportIssueScreen from './screens/ReportIssueScreen';
 import SetReminderScreen from './screens/SetReminderScreen';
 import SatisfactionScreen from './screens/SatisfactionScreen';
 import AdminPaymentScreen from './screens/AdminPaymentScreen';
+import SettingsScreen from './screens/SettingsScreen';
 
 import FeedbackBubble from './components/FeedbackBubble';
 
@@ -64,6 +65,7 @@ export type RootStackParamList = {
   MyListings: undefined;
   ThemeTest: undefined;
   AdminPayments: undefined;
+  Settings: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -241,6 +243,10 @@ export default function App() {
               <Stack.Screen
                 name="AdminPayments"
                 component={AdminPaymentScreen}
+              />
+              <Stack.Screen
+                name="Settings"
+                component={SettingsScreen}
               />
             </Stack.Navigator>
           </NavigationContainer>

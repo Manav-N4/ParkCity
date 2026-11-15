@@ -1,5 +1,5 @@
 
-import { useCallback, useState } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -72,6 +72,13 @@ export default function ProfileScreen({ navigation }: Props) {
       void loadProfile();
     }, [loadProfile]),
   );
+
+  // Fast admin check on mount via getSession (doesn't require a network round-trip)
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAdmin(session?.user?.email === ADMIN_EMAIL);
+    }).catch(() => {});
+  }, []);
 
   const handleSignOut = () => {
     Alert.alert(
@@ -242,6 +249,44 @@ export default function ProfileScreen({ navigation }: Props) {
               ]}
             >
               Manage your parking listings
+            </Text>
+          </View>
+
+          <Ionicons
+            name="chevron-forward"
+            size={20}
+            color={colors.textSecondary}
+          />
+        </Pressable>
+
+        <View style={[styles.divider, { backgroundColor: colors.border }]} />
+
+        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Settings')}>
+          <View
+            style={[
+              styles.menuIcon,
+              { backgroundColor: colors.primary + '18' },
+            ]}
+          >
+            <Ionicons
+              name="settings-outline"
+              size={22}
+              color={colors.primary}
+            />
+          </View>
+
+          <View style={styles.menuInfo}>
+            <Text style={[styles.menuTitle, { color: colors.text }]}>
+              Settings
+            </Text>
+
+            <Text
+              style={[
+                styles.menuSubtitle,
+                { color: colors.textSecondary },
+              ]}
+            >
+              Dark mode, notifications
             </Text>
           </View>
 
