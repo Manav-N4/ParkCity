@@ -32,7 +32,7 @@ router.get('/:user_id', async (req, res) => {
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('id, name, phone')
+      .select('id, name, phone, avatar_url, created_at')
       .eq('id', user_id)
       .maybeSingle()
 

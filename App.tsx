@@ -25,6 +25,7 @@ import SatisfactionScreen from './screens/SatisfactionScreen';
 import AdminPaymentScreen from './screens/AdminPaymentScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import LegalScreen from './screens/LegalScreen';
+import CreateListingScreen from './screens/CreateListingScreen';
 
 import FeedbackBubble from './components/FeedbackBubble';
 
@@ -68,6 +69,8 @@ export type RootStackParamList = {
   AdminPayments: undefined;
   Settings: undefined;
   Legal: undefined;
+  SpotDetail: { spotId: string };
+  CreateListing: undefined;
 };
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
@@ -253,6 +256,10 @@ export default function App() {
               <Stack.Screen
                 name="Legal"
                 component={LegalScreen}
+              />
+              <Stack.Screen
+                name="CreateListing"
+                component={CreateListingScreen}
               />
             </Stack.Navigator>
           </NavigationContainer>

@@ -1,132 +1,224 @@
 
-import { useCallback, useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'
 import {
-  ActivityIndicator,
-  Alert,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
   View,
-} from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import { Ionicons } from '@expo/vector-icons';
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  TextInput,
+  Alert,
+  ScrollView,
+  Image,
+  ActivityIndicator,
+} from 'react-native'
+import * as ImagePicker from 'expo-image-picker'
+import { useFocusEffect, useNavigation } from '@react-navigation/native'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import type { RootStackParamList } from '../App'
+import { useTheme } from '../contexts/ThemeContext'
+import { API_BASE_URL } from '../lib/api'
+import { supabase } from '../lib/supabase'
+import VerificationBadge from '../components/VerificationBadge'
+import type { VerificationTier } from '../types/parking'
+import { spacing, fontWeight } from '../constants/tokens'
 
-import type { RootStackParamList } from '../App';
+type Nav = NativeStackNavigationProp<RootStackParamList>
 
 const ADMIN_EMAIL = 'nayakmanav04@gmail.com'
 
-import { supabase } from '../lib/supabase';
-import { useTheme } from '../contexts/ThemeContext';
-import { spacing, fontWeight } from '../constants/tokens';
+type Spot = {
+  id: string
+  name: string
+  address: string | null
+  ownership_status: string
+  verification_tier: VerificationTier
+}
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Profile'>;
+type Profile = {
+  id: string
+  name: string
+  email: string
+  avatar_url: string | null
+  created_at: string
+}
 
-export default function ProfileScreen({ navigation }: Props) {
-  const { colors } = useTheme();
+export default function ProfileScreen() {
+  const { colors } = useTheme()
+  const navigation = useNavigation<Nav>()
 
-  const [name, setName] = useState('ParkCity User');
-  const [email, setEmail] = useState('');
-  const [isAdmin, setIsAdmin] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [signingOut, setSigningOut] = useState(false);
+  const [profile, setProfile] = useState<Profile | null>(null)
+  const [listings, setListings] = useState<Spot[]>([])
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [avatarLoading, setAvatarLoading] = useState(false)
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [signingOut, setSigningOut] = useState(false)
+
+  // Fast admin check from local session on mount
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setIsAdmin(session?.user?.email === ADMIN_EMAIL)
+    }).catch(() => {})
+  }, [])
 
   const loadProfile = useCallback(async () => {
-    setLoading(true);
-
+    setLoading(true)
     try {
-      const {
-        data: { user },
-        error,
-      } = await supabase.auth.getUser();
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
 
-      if (error) throw error;
+      setIsAdmin(session.user.email === ADMIN_EMAIL)
 
-      if (user) {
-        setEmail(user.email ?? '');
-        setIsAdmin(user.email === ADMIN_EMAIL);
+      const res = await fetch(`${API_BASE_URL}/profile/${session.user.id}`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
 
-        const metadata = user.user_metadata ?? {};
-
-        setName(
-          metadata.full_name ||
-            metadata.name ||
-            metadata.display_name ||
-            user.email?.split('@')[0] ||
-            'ParkCity User',
-        );
+      let data = null
+      if (res.ok) {
+        data = await res.json()
       } else {
-        setName('Guest User');
-        setEmail('');
+        console.warn('profile fetch failed:', res.status)
       }
-    } catch (error) {
-      console.error('Could not load profile:', error);
+
+      const avatarWithBust = data?.avatar_url ? `${data.avatar_url}?t=${Date.now()}` : null
+      setProfile({
+        id: data?.id ?? session.user.id,
+        name: data?.name ?? 'ParkCity User',
+        email: session.user.email ?? '',
+        avatar_url: avatarWithBust,
+        created_at: data?.created_at ?? '',
+      })
+      setNameInput(data?.name ?? 'ParkCity User')
+    } catch (e) {
+      console.error('load profile error:', e)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, []);
+  }, [])
+
+  const loadListings = useCallback(async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
+
+      const res = await fetch(`${API_BASE_URL}/profile/listings`, {
+        headers: { Authorization: `Bearer ${session.access_token}` },
+      })
+      const data = await res.json()
+      setListings(Array.isArray(data) ? data : [])
+    } catch (e) {
+      console.error('load listings error:', e)
+    }
+  }, [])
 
   useFocusEffect(
     useCallback(() => {
-      void loadProfile();
-    }, [loadProfile]),
-  );
+      void loadProfile()
+      void loadListings()
+    }, [loadProfile, loadListings]),
+  )
 
-  // Fast admin check on mount via getSession (doesn't require a network round-trip)
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAdmin(session?.user?.email === ADMIN_EMAIL);
-    }).catch(() => {});
-  }, []);
+  const saveName = async () => {
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
 
-  const handleSignOut = () => {
-    Alert.alert(
-      'Sign out',
-      'Are you sure you want to sign out of ParkCity?',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Sign out',
-          style: 'destructive',
-          onPress: async () => {
-            setSigningOut(true);
-
-            try {
-              const { error } = await supabase.auth.signOut();
-
-              if (error) throw error;
-
-              setName('Guest User');
-              setEmail('');
-            } catch (error) {
-              Alert.alert(
-                'Sign out failed',
-                error instanceof Error ? error.message : 'Please try again.',
-              );
-            } finally {
-              setSigningOut(false);
-            }
-          },
+      const res = await fetch(`${API_BASE_URL}/profile/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
         },
-      ],
-    );
-  };
+        body: JSON.stringify({ name: nameInput }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error)
+      setProfile((p) => p ? { ...p, name: nameInput } : p)
+      setEditingName(false)
+      Alert.alert('Saved', 'Your name has been updated')
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not save name')
+    }
+  }
 
-  const openHistory = () => {
-    navigation.navigate('ParkingHistory');
-  };
+  const changeAvatar = async () => {
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: [1, 1] as [number, number],
+      quality: 0.8,
+    })
+    if (result.canceled) return
 
-  const openListings = () => {
-    navigation.navigate('MyListings');
-  };
+    setAvatarLoading(true)
+    try {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (!session) return
 
-  const initials = name
-    .split(' ')
+      const uri = result.assets[0].uri
+      const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg'
+      // Fixed path so re-upload always replaces the same object in the bucket
+      const path = `${session.user.id}/avatar.jpg`
+
+      const response = await fetch(uri)
+      const blob = await response.blob()
+
+      const { error: uploadError } = await supabase.storage
+        .from('avatars')
+        .upload(path, blob, { contentType: 'image/jpeg', upsert: true })
+
+      if (uploadError) throw uploadError
+
+      const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+      // Clean URL stored in DB, busted URL shown in UI
+      const cleanUrl = urlData.publicUrl
+      const displayUrl = `${cleanUrl}?t=${Date.now()}`
+
+      await fetch(`${API_BASE_URL}/profile/update`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ avatar_url: cleanUrl }),
+      })
+
+      setProfile((p) => p ? { ...p, avatar_url: displayUrl } : p)
+    } catch (e) {
+      Alert.alert('Error', e instanceof Error ? e.message : 'Could not update avatar')
+    } finally {
+      setAvatarLoading(false)
+    }
+  }
+
+  const signOut = () => {
+    Alert.alert('Sign out', 'Are you sure you want to sign out of ParkCity?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign out',
+        style: 'destructive',
+        onPress: async () => {
+          setSigningOut(true)
+          try {
+            await supabase.auth.signOut()
+            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })
+          } catch (e) {
+            Alert.alert('Error', 'Could not sign out. Try again.')
+          } finally {
+            setSigningOut(false)
+          }
+        },
+      },
+    ])
+  }
+
+  const initials = profile?.name
+    ?.split(' ')
     .filter(Boolean)
     .slice(0, 2)
-    .map((part) => part[0].toUpperCase())
-    .join('');
+    .map((p) => p[0].toUpperCase())
+    .join('') ?? '?'
 
   return (
     <ScrollView
@@ -134,354 +226,256 @@ export default function ProfileScreen({ navigation }: Props) {
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={false}
     >
+      {/* Avatar + Name */}
       <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          Profile
-        </Text>
-
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Manage your ParkCity account.
-        </Text>
-      </View>
-
-      <View
-        style={[
-          styles.profileCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <View style={[styles.avatar, { backgroundColor: colors.primary }]}>
-          {loading ? (
-            <ActivityIndicator color="#FFFFFF" />
+        <TouchableOpacity onPress={() => void changeAvatar()} disabled={avatarLoading}>
+          {avatarLoading ? (
+            <ActivityIndicator style={styles.avatar} color={colors.primary} />
+          ) : profile?.avatar_url ? (
+            <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
           ) : (
-            <Text style={styles.avatarText}>{initials || 'P'}</Text>
+            <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.surface }]}>
+              <Text style={[styles.avatarInitial, { color: colors.primary }]}>
+                {loading ? '' : initials}
+              </Text>
+            </View>
           )}
-        </View>
+          <Text style={[styles.changePhoto, { color: colors.primary }]}>Change Photo</Text>
+        </TouchableOpacity>
 
-        <View style={styles.profileInfo}>
-          <Text style={[styles.name, { color: colors.text }]}>
-            {loading ? 'Loading profile...' : name}
-          </Text>
+        {editingName ? (
+          <View style={styles.nameRow}>
+            <TextInput
+              style={[styles.nameInput, { color: colors.text, borderColor: colors.border }]}
+              value={nameInput}
+              onChangeText={setNameInput}
+              autoFocus
+            />
+            <TouchableOpacity onPress={() => void saveName()}>
+              <Text style={[styles.saveBtn, { color: colors.primary }]}>Save</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <TouchableOpacity onPress={() => setEditingName(true)}>
+            <Text style={[styles.name, { color: colors.text }]}>
+              {loading ? 'Loading…' : (profile?.name ?? 'Your Name')}
+            </Text>
+            <Text style={[styles.editHint, { color: colors.textSecondary }]}>Tap to edit</Text>
+          </TouchableOpacity>
+        )}
 
-          <Text style={[styles.email, { color: colors.textSecondary }]}>
-            {email || 'Not signed in'}
+        <Text style={[styles.email, { color: colors.textSecondary }]}>{profile?.email}</Text>
+        {profile?.created_at && (
+          <Text style={[styles.joined, { color: colors.textSecondary }]}>
+            Joined{' '}
+            {new Date(profile.created_at).toLocaleDateString('en-IN', {
+              month: 'long',
+              year: 'numeric',
+            })}
           </Text>
-        </View>
+        )}
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-        Your activity
-      </Text>
-
-      <View
-        style={[
-          styles.menuCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
-        ]}
-      >
-        <Pressable style={styles.menuItem} onPress={openHistory}>
-          <View
-            style={[
-              styles.menuIcon,
-              { backgroundColor: colors.primary + '18' },
-            ]}
-          >
-            <Ionicons
-              name="time-outline"
-              size={22}
-              color={colors.primary}
-            />
-          </View>
-
-          <View style={styles.menuInfo}>
-            <Text style={[styles.menuTitle, { color: colors.text }]}>
-              Parking History
-            </Text>
-
-            <Text
-              style={[
-                styles.menuSubtitle,
-                { color: colors.textSecondary },
-              ]}
-            >
-              View your previous parking sessions
-            </Text>
-          </View>
-
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={colors.textSecondary}
-          />
-        </Pressable>
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-        <Pressable style={styles.menuItem} onPress={openListings}>
-          <View
-            style={[
-              styles.menuIcon,
-              { backgroundColor: colors.primary + '18' },
-            ]}
-          >
-            <Ionicons
-              name="car-outline"
-              size={22}
-              color={colors.primary}
-            />
-          </View>
-
-          <View style={styles.menuInfo}>
-            <Text style={[styles.menuTitle, { color: colors.text }]}>
-              My Listings
-            </Text>
-
-            <Text
-              style={[
-                styles.menuSubtitle,
-                { color: colors.textSecondary },
-              ]}
-            >
-              Manage your parking listings
-            </Text>
-          </View>
-
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={colors.textSecondary}
-          />
-        </Pressable>
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-        <Pressable style={styles.menuItem} onPress={() => navigation.navigate('Settings')}>
-          <View
-            style={[
-              styles.menuIcon,
-              { backgroundColor: colors.primary + '18' },
-            ]}
-          >
-            <Ionicons
-              name="settings-outline"
-              size={22}
-              color={colors.primary}
-            />
-          </View>
-
-          <View style={styles.menuInfo}>
-            <Text style={[styles.menuTitle, { color: colors.text }]}>
-              Settings
-            </Text>
-
-            <Text
-              style={[
-                styles.menuSubtitle,
-                { color: colors.textSecondary },
-              ]}
-            >
-              Dark mode, notifications
-            </Text>
-          </View>
-
-          <Ionicons
-            name="chevron-forward"
-            size={20}
-            color={colors.textSecondary}
-          />
-        </Pressable>
-      </View>
-
-      {isAdmin && (
+      {/* My Listings */}
+      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>My Listings</Text>
+      {listings.length === 0 ? (
         <>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Admin
+          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+            You haven't listed any parking spots yet.
           </Text>
-
-          <View
-            style={[
-              styles.menuCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
+          <TouchableOpacity
+            style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: spacing.md }]}
+            onPress={() => navigation.navigate('CreateListing')}
+            activeOpacity={0.75}
           >
-            <Pressable
-              style={styles.menuItem}
-              onPress={() => navigation.navigate('AdminPayments')}
-            >
-              <View
-                style={[
-                  styles.menuIcon,
-                  { backgroundColor: colors.primary + '18' },
-                ]}
-              >
-                <Ionicons
-                  name="card-outline"
-                  size={22}
-                  color={colors.primary}
-                />
-              </View>
-
-              <View style={styles.menuInfo}>
-                <Text style={[styles.menuTitle, { color: colors.text }]}>
-                  Merchant Payments
-                </Text>
-
-                <Text
-                  style={[
-                    styles.menuSubtitle,
-                    { color: colors.textSecondary },
-                  ]}
-                >
-                  Generate payment links for merchants
-                </Text>
-              </View>
-
-              <Ionicons
-                name="chevron-forward"
-                size={20}
-                color={colors.textSecondary}
-              />
-            </Pressable>
-          </View>
+            <Text style={[styles.actionLabel, { color: colors.primary }]}>+ List a Parking Spot</Text>
+          </TouchableOpacity>
         </>
+      ) : (
+        listings.map((spot) => (
+          <TouchableOpacity
+            key={spot.id}
+            style={[styles.listingRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+            onPress={() => navigation.navigate('SpotDetail', { spotId: spot.id })}
+            activeOpacity={0.75}
+          >
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.listingName, { color: colors.text }]}>{spot.name}</Text>
+              {spot.address && (
+                <Text style={[styles.listingAddress, { color: colors.textSecondary }]}>
+                  {spot.address}
+                </Text>
+              )}
+            </View>
+            {spot.ownership_status === 'pending' ? (
+              <Text style={[styles.pendingBadge, { color: colors.warning }]}>Pending review</Text>
+            ) : (
+              <VerificationBadge tier={spot.verification_tier} />
+            )}
+          </TouchableOpacity>
+        ))
       )}
 
-      <Pressable
-        onPress={handleSignOut}
-        disabled={signingOut || loading || !email}
-        style={[
-          styles.signOutButton,
-          { borderColor: colors.error },
-          (signingOut || loading || !email) && { opacity: 0.5 },
-        ]}
+      {/* Account actions */}
+      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Account</Text>
+
+      <TouchableOpacity
+        style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onPress={() => navigation.navigate('Settings')}
+        activeOpacity={0.75}
+      >
+        <Text style={[styles.actionLabel, { color: colors.text }]}>Settings</Text>
+        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onPress={() => navigation.navigate('Legal')}
+        activeOpacity={0.75}
+      >
+        <Text style={[styles.actionLabel, { color: colors.text }]}>Privacy & Legal</Text>
+        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+      </TouchableOpacity>
+
+      {isAdmin && (
+        <TouchableOpacity
+          style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          onPress={() => navigation.navigate('AdminPayments')}
+          activeOpacity={0.75}
+        >
+          <Text style={[styles.actionLabel, { color: colors.text }]}>Merchant Payments</Text>
+          <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
+        </TouchableOpacity>
+      )}
+
+      <TouchableOpacity
+        style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onPress={signOut}
+        disabled={signingOut}
+        activeOpacity={0.75}
       >
         {signingOut ? (
           <ActivityIndicator color={colors.error} />
         ) : (
-          <>
-            <Ionicons
-              name="log-out-outline"
-              size={20}
-              color={colors.error}
-            />
-
-            <Text style={[styles.signOutText, { color: colors.error }]}>
-              Sign out
-            </Text>
-          </>
+          <Text style={[styles.actionLabel, { color: colors.error }]}>Sign Out</Text>
         )}
-      </Pressable>
+      </TouchableOpacity>
     </ScrollView>
-  );
+  )
 }
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 60,
-    paddingBottom: spacing.xl,
+    paddingBottom: 48,
   },
   header: {
-    marginBottom: spacing.xl,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: fontWeight.bold,
-  },
-  subtitle: {
-    marginTop: spacing.xs,
-    fontSize: 14,
-  },
-  profileCard: {
-    flexDirection: 'row',
     alignItems: 'center',
-    padding: spacing.lg,
-    borderRadius: 18,
-    borderWidth: 1,
-    gap: spacing.md,
-    marginBottom: spacing.xl,
+    paddingVertical: 28,
+    paddingHorizontal: spacing.lg,
   },
   avatar: {
-    width: 58,
-    height: 58,
-    borderRadius: 29,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    marginBottom: 8,
+  },
+  avatarPlaceholder: {
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarText: {
-    color: '#FFFFFF',
-    fontSize: 21,
+  avatarInitial: {
+    fontSize: 32,
     fontWeight: fontWeight.bold,
   },
-  profileInfo: {
-    flex: 1,
-    gap: 5,
+  changePhoto: {
+    fontSize: 13,
+    fontWeight: fontWeight.semibold,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  nameInput: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 8,
+    fontSize: 18,
+    minWidth: 160,
+  },
+  saveBtn: {
+    fontSize: 15,
+    fontWeight: fontWeight.bold,
   },
   name: {
-    fontSize: 17,
-    fontWeight: fontWeight.semibold,
+    fontSize: 20,
+    fontWeight: fontWeight.bold,
+    textAlign: 'center',
+  },
+  editHint: {
+    fontSize: 12,
+    textAlign: 'center',
+    marginTop: 2,
   },
   email: {
-    fontSize: 13,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: fontWeight.bold,
-    marginBottom: spacing.md,
-  },
-  menuCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.xl,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  menuIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 13,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  menuInfo: {
-    flex: 1,
-    gap: 4,
-  },
-  menuTitle: {
     fontSize: 14,
-    fontWeight: fontWeight.semibold,
+    marginTop: 6,
   },
-  menuSubtitle: {
+  joined: {
     fontSize: 12,
+    marginTop: 4,
   },
-  divider: {
-    height: 1,
+  sectionLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginTop: 24,
+    marginBottom: 8,
+    marginLeft: spacing.lg,
   },
-  signOutButton: {
+  emptyText: {
+    fontSize: 14,
+    marginHorizontal: spacing.lg,
+    marginBottom: 8,
+  },
+  listingRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.sm,
-    padding: spacing.md,
+    padding: 14,
+    borderRadius: 12,
     borderWidth: 1,
-    borderRadius: 13,
+    marginHorizontal: spacing.md,
+    marginBottom: 8,
   },
-  signOutText: {
-    fontSize: 14,
+  listingName: {
+    fontSize: 15,
     fontWeight: fontWeight.semibold,
   },
-});
+  listingAddress: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  pendingBadge: {
+    fontSize: 12,
+    fontWeight: fontWeight.semibold,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginHorizontal: spacing.md,
+    marginBottom: 8,
+  },
+  actionLabel: {
+    fontSize: 15,
+  },
+  chevron: {
+    fontSize: 18,
+  },
+})
