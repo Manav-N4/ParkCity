@@ -76,14 +76,14 @@ router.post('/update', async (req, res) => {
       return res.status(400).json({ error: 'name or avatar_url is required' })
     }
 
-    const updates = {}
-    if (name) updates.name = name
-    if (avatar_url) updates.avatar_url = avatar_url
+    const updates = { id: user_id }
+    if (name !== undefined) updates.name = name
+    // Strip cache-bust query string before storing
+    if (avatar_url !== undefined) updates.avatar_url = avatar_url.split('?')[0]
 
     const { error } = await supabase
       .from('profiles')
-      .update(updates)
-      .eq('id', user_id)
+      .upsert(updates, { onConflict: 'id' })
 
     if (error) {
       console.error('db error:', error)

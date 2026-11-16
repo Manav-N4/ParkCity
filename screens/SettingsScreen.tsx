@@ -5,11 +5,17 @@ import {
   Text,
   Switch,
   StyleSheet,
+  TouchableOpacity,
 } from 'react-native'
 import Constants from 'expo-constants'
 import { useTheme } from '../contexts/ThemeContext'
 import { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
+import { useNavigation } from '@react-navigation/native'
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
+import type { RootStackParamList } from '../App'
+
+type Nav = NativeStackNavigationProp<RootStackParamList>
 
 interface ProfilePreferences {
   reminders_enabled?: boolean | null
@@ -20,6 +26,7 @@ type NotificationPreference = 'reminders' | 'satisfaction'
 
 export default function SettingsScreen() {
   const { colors, isDark, setTheme } = useTheme()
+  const navigation = useNavigation<Nav>()
 
   const [reminders, setReminders] = useState<boolean>(true)
   const [satisfactionPrompts, setSatisfactionPrompts] = useState<boolean>(true)
@@ -157,6 +164,15 @@ export default function SettingsScreen() {
           {Constants.expoConfig?.version ?? '1.0.0'}
         </Text>
       </View>
+
+      <TouchableOpacity
+        style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        onPress={() => navigation.navigate('Legal')}
+        activeOpacity={0.7}
+      >
+        <Text style={[styles.rowLabel, { color: colors.text }]}>Privacy & Legal</Text>
+        <Text style={{ color: colors.textSecondary, fontSize: 18 }}>›</Text>
+      </TouchableOpacity>
 
     </View>
   )
