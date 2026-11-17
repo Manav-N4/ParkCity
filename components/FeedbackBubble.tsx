@@ -2,7 +2,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   AppState,
   Pressable,
   StyleSheet,
@@ -22,6 +21,7 @@ import {
 } from '../lib/api';
 
 import { supabase } from '../lib/supabase';
+import { useDialog } from '../contexts/DialogContext';
 
 import {
   colors,
@@ -42,6 +42,8 @@ type Props = {
 };
 
 export default function FeedbackBubble({ hidden = false }: Props) {
+  const { showDialog } = useDialog();
+
   const [feedback, setFeedback] = useState<FeedbackItem | null>(null);
   const [submittingRating, setSubmittingRating] = useState(false);
   const [activeStar, setActiveStar] = useState<number | null>(null);
@@ -228,12 +230,14 @@ export default function FeedbackBubble({ hidden = false }: Props) {
     } catch (error) {
       console.error('QUICK RATING FAILED:', error);
 
-      Alert.alert(
-        'Rating failed',
-        error instanceof Error
-          ? error.message
-          : 'Could not submit your rating. Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Rating failed',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not submit your rating. Please try again.',
+      });
     } finally {
       setSubmittingRating(false);
       setActiveStar(null);
@@ -254,10 +258,11 @@ export default function FeedbackBubble({ hidden = false }: Props) {
     } catch (error) {
       console.error('COULD NOT DISMISS FEEDBACK REQUEST:', error);
 
-      Alert.alert(
-        'Could not dismiss',
-        'Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Could not dismiss',
+        message: 'Please try again.',
+      });
 
       void loadFeedback();
     }

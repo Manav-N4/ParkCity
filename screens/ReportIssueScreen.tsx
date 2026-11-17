@@ -1,7 +1,7 @@
+
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Image,
   KeyboardAvoidingView,
   Platform,
@@ -17,6 +17,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDialog } from '../contexts/DialogContext';
 import PrimaryButton from '../components/ui/PrimaryButton';
 import { supabase } from '../lib/supabase';
 import {
@@ -78,6 +79,7 @@ export default function ReportIssueScreen({
 }: Props) {
   const { spot } = route.params;
   const { colors } = useTheme();
+  const { showDialog } = useDialog();
 
   const [issueType, setIssueType] = useState<ReportIssueType | null>(null);
   const [reportedPrice, setReportedPrice] = useState('');
@@ -93,10 +95,11 @@ export default function ReportIssueScreen({
           await ImagePicker.requestCameraPermissionsAsync();
 
         if (!permission.granted) {
-          Alert.alert(
-            'Camera permission required',
-            'Allow camera access in your device settings to take a photo.'
-          );
+          showDialog({
+            type: 'warning',
+            title: 'Camera permission required',
+            message: 'Allow camera access in your device settings to take a photo.',
+          });
           return;
         }
 
@@ -111,10 +114,11 @@ export default function ReportIssueScreen({
           await ImagePicker.requestMediaLibraryPermissionsAsync();
 
         if (!permission.granted) {
-          Alert.alert(
-            'Gallery permission required',
-            'Allow photo library access to select an image.'
-          );
+          showDialog({
+            type: 'warning',
+            title: 'Gallery permission required',
+            message: 'Allow photo library access to select an image.',
+          });
           return;
         }
 
@@ -136,12 +140,13 @@ export default function ReportIssueScreen({
         mimeType: asset.mimeType ?? null,
       });
     } catch (error) {
-      Alert.alert(
-        'Photo error',
-        error instanceof Error
+      showDialog({
+        type: 'error',
+        title: 'Photo error',
+        message: error instanceof Error
           ? error.message
-          : 'Could not select this photo.'
-      );
+          : 'Could not select this photo.',
+      });
     }
   };
 
@@ -185,18 +190,20 @@ export default function ReportIssueScreen({
 
   const handleSubmit = async () => {
     if (!issueType) {
-      Alert.alert(
-        'Select an issue',
-        'Please select the problem you want to report.'
-      );
+      showDialog({
+        type: 'warning',
+        title: 'Select an issue',
+        message: 'Please select the problem you want to report.',
+      });
       return;
     }
 
     if (!spot.id) {
-      Alert.alert(
-        'Invalid parking spot',
-        'The parking spot ID is missing. Please go back and try again.'
-      );
+      showDialog({
+        type: 'error',
+        title: 'Invalid parking spot',
+        message: 'The parking spot ID is missing. Please go back and try again.',
+      });
       return;
     }
 
@@ -206,10 +213,11 @@ export default function ReportIssueScreen({
         !Number.isFinite(Number(reportedPrice)) ||
         Number(reportedPrice) < 0
       ) {
-        Alert.alert(
-          'Invalid price',
-          'Enter the correct hourly parking price.'
-        );
+        showDialog({
+          type: 'warning',
+          title: 'Invalid price',
+          message: 'Enter the correct hourly parking price.',
+        });
         return;
       }
     }
@@ -227,10 +235,11 @@ export default function ReportIssueScreen({
       }
 
       if (!session?.user || !session.access_token) {
-        Alert.alert(
-          'Sign in required',
-          'Please sign in before submitting a report.'
-        );
+        showDialog({
+          type: 'warning',
+          title: 'Sign in required',
+          message: 'Please sign in before submitting a report.',
+        });
         return;
       }
 
@@ -252,23 +261,26 @@ export default function ReportIssueScreen({
         ...(photoPath ? { photo_url: photoPath } : {}),
       });
 
-      Alert.alert(
-        'Report submitted',
-        'Thank you for helping us keep ParkCity accurate.',
-        [
+      showDialog({
+        type: 'success',
+        title: 'Report submitted',
+        message: 'Thank you for helping us keep ParkCity accurate.',
+        actions: [
           {
-            text: 'Done',
+            label: 'Done',
+            variant: 'primary',
             onPress: () => navigation.goBack(),
           },
-        ]
-      );
+        ],
+      });
     } catch (error) {
-      Alert.alert(
-        'Could not submit report',
-        error instanceof Error
+      showDialog({
+        type: 'error',
+        title: 'Could not submit report',
+        message: error instanceof Error
           ? error.message
-          : 'Something went wrong. Please try again.'
-      );
+          : 'Something went wrong. Please try again.',
+      });
     } finally {
       setLoading(false);
     }

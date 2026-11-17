@@ -2,7 +2,6 @@
 import { useCallback, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -26,11 +25,12 @@ import type { SavedSpot } from '../lib/api';
 import { getSavedSpots, toggleSavedSpot } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDialog } from '../contexts/DialogContext';
 import { spacing, fontWeight } from '../constants/tokens';
 
-import ParkingSpotCard from '../components/ParkingSpotCard'
-import SkeletonCard from '../components/ui/SkeletonCard'
-import EmptyState from '../components/ui/EmptyState'
+import ParkingSpotCard from '../components/ParkingSpotCard';
+import SkeletonCard from '../components/ui/SkeletonCard';
+import EmptyState from '../components/ui/EmptyState';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Saved'>,
@@ -39,6 +39,7 @@ type Props = CompositeScreenProps<
 
 export default function SavedScreen({ navigation }: Props) {
   const { colors } = useTheme();
+  const { showDialog } = useDialog();
 
   const [savedSpots, setSavedSpots] = useState<SavedSpot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -102,12 +103,14 @@ export default function SavedScreen({ navigation }: Props) {
         previous.filter((item) => item.id !== spot.id),
       );
     } catch (err) {
-      Alert.alert(
-        'Unable to remove spot',
-        err instanceof Error
-          ? err.message
-          : 'Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Unable to remove spot',
+        message:
+          err instanceof Error
+            ? err.message
+            : 'Please try again.',
+      });
     } finally {
       setRemovingId(null);
     }

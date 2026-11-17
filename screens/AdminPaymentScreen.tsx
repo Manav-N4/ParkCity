@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   Clipboard,
   ActivityIndicator,
   ScrollView,
@@ -14,6 +13,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../App'
 import { useTheme } from '../contexts/ThemeContext'
+import { useDialog } from '../contexts/DialogContext'
 import { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { spacing, fontWeight } from '../constants/tokens'
@@ -22,6 +22,8 @@ type Props = NativeStackScreenProps<RootStackParamList, 'AdminPayments'>
 
 export default function AdminPaymentScreen({ navigation }: Props) {
   const { colors } = useTheme()
+  const { showDialog } = useDialog()
+
   const [merchantId, setMerchantId] = useState('')
   const [spotId, setSpotId] = useState('')
   const [amount, setAmount] = useState('')
@@ -30,7 +32,11 @@ export default function AdminPaymentScreen({ navigation }: Props) {
 
   const generateLink = async () => {
     if (!merchantId || !spotId || !amount) {
-      Alert.alert('Error', 'All fields are required')
+      showDialog({
+        type: 'warning',
+        title: 'Error',
+        message: 'All fields are required',
+      })
       return
     }
 
@@ -53,7 +59,11 @@ export default function AdminPaymentScreen({ navigation }: Props) {
       if (!res.ok) throw new Error(data.error)
       setPaymentLink(data.payment_link)
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong')
+      showDialog({
+        type: 'error',
+        title: 'Error',
+        message: e instanceof Error ? e.message : 'Something went wrong',
+      })
     } finally {
       setLoading(false)
     }
@@ -62,7 +72,11 @@ export default function AdminPaymentScreen({ navigation }: Props) {
   const copyLink = () => {
     if (!paymentLink) return
     Clipboard.setString(paymentLink)
-    Alert.alert('Copied', 'Payment link copied to clipboard')
+    showDialog({
+      type: 'success',
+      title: 'Copied',
+      message: 'Payment link copied to clipboard',
+    })
   }
 
   return (
@@ -204,4 +218,3 @@ const styles = StyleSheet.create({
     fontWeight: fontWeight.semibold,
   },
 })
-

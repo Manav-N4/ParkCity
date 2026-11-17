@@ -1,6 +1,5 @@
 
 import {
-  Alert,
   Linking,
   StyleSheet,
   Text,
@@ -30,6 +29,7 @@ import {
   type SpotDeal,
 } from '../lib/api';
 import { supabase } from '../lib/supabase';
+import { useDialog } from '../contexts/DialogContext';
 import {
   colors,
   fontWeight,
@@ -53,6 +53,7 @@ export default function ParkingDetailsScreen({
   navigation,
 }: Props) {
   const { spot } = route.params;
+  const { showDialog } = useDialog();
 
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -198,10 +199,12 @@ export default function ParkingDetailsScreen({
     }
 
     if (!validSpotId) {
-      Alert.alert(
-        'Cannot save this spot',
-        'This parking spot is temporarily unavailable for saving. Please try again later.',
-      );
+      showDialog({
+        type: 'warning',
+        title: 'Cannot save this spot',
+        message:
+          'This parking spot is temporarily unavailable for saving. Please try again later.',
+      });
       return;
     }
 
@@ -218,13 +221,14 @@ export default function ParkingDetailsScreen({
       }
 
       if (!session?.access_token) {
-        Alert.alert(
-          'Sign in required',
-          'Please sign in to save your favourite parking spots.',
-          [
-            { text: 'Cancel', style: 'cancel' },
+        showDialog({
+          type: 'warning',
+          title: 'Sign in required',
+          message: 'Please sign in to save your favourite parking spots.',
+          actions: [
+            { label: 'Cancel', variant: 'secondary' },
             {
-              text: 'Sign in',
+              label: 'Sign in',
               onPress: () =>
                 navigation.navigate('EmailLogin', {
                   next: {
@@ -234,7 +238,7 @@ export default function ParkingDetailsScreen({
                 }),
             },
           ],
-        );
+        });
         return;
       }
 
@@ -250,12 +254,14 @@ export default function ParkingDetailsScreen({
     } catch (error) {
       console.error('Could not update saved spot:', error);
 
-      Alert.alert(
-        'Something went wrong',
-        error instanceof Error
-          ? error.message
-          : 'Could not update your saved spots. Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Something went wrong',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not update your saved spots. Please try again.',
+      });
     } finally {
       setIsSaving(false);
     }
@@ -305,13 +311,14 @@ export default function ParkingDetailsScreen({
       }
 
       if (!session?.access_token) {
-        Alert.alert(
-          'Sign in required',
-          'Please sign in to start a parking session.',
-          [
-            { text: 'Cancel', style: 'cancel' },
+        showDialog({
+          type: 'warning',
+          title: 'Sign in required',
+          message: 'Please sign in to start a parking session.',
+          actions: [
+            { label: 'Cancel', variant: 'secondary' },
             {
-              text: 'Sign in',
+              label: 'Sign in',
               onPress: () =>
                 navigation.navigate('EmailLogin', {
                   next: {
@@ -321,7 +328,7 @@ export default function ParkingDetailsScreen({
                 }),
             },
           ],
-        );
+        });
         return;
       }
 
@@ -426,10 +433,11 @@ export default function ParkingDetailsScreen({
       } = await supabase.auth.getSession();
 
       if (error) {
-        Alert.alert(
-          'Something went wrong',
-          'Could not verify your sign-in status. Please try again.',
-        );
+        showDialog({
+          type: 'error',
+          title: 'Something went wrong',
+          message: 'Could not verify your sign-in status. Please try again.',
+        });
         return;
       }
 
@@ -447,10 +455,11 @@ export default function ParkingDetailsScreen({
     } catch (error) {
       console.error('Could not check sign-in status:', error);
 
-      Alert.alert(
-        'Something went wrong',
-        'Could not verify your sign-in status. Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Something went wrong',
+        message: 'Could not verify your sign-in status. Please try again.',
+      });
     }
   };
 

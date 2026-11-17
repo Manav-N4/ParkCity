@@ -1,7 +1,7 @@
+
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -16,6 +16,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDialog } from '../contexts/DialogContext';
 import PrimaryButton from '../components/ui/PrimaryButton';
 import { supabase } from '../lib/supabase';
 import { API_BASE_URL } from '../lib/api';
@@ -57,6 +58,7 @@ function getGpsValue(
 export default function ClaimSpotScreen({ route, navigation }: Props) {
   const { spot } = route.params;
   const { colors } = useTheme();
+  const { showDialog } = useDialog();
 
   const [step, setStep] = useState(1);
   const [businessName, setBusinessName] = useState('');
@@ -78,10 +80,12 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
         await ImagePicker.requestCameraPermissionsAsync();
 
       if (!permission.granted) {
-        Alert.alert(
-          'Camera permission required',
-          'Allow camera access in your device settings to photograph this parking spot.',
-        );
+        showDialog({
+          type: 'warning',
+          title: 'Camera permission required',
+          message:
+            'Allow camera access in your device settings to photograph this parking spot.',
+        });
         return;
       }
 
@@ -120,17 +124,23 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
       });
     } catch (error) {
       console.error('Camera capture failed:', error);
-      Alert.alert('Camera error', 'Could not capture this photo.');
+      showDialog({
+        type: 'error',
+        title: 'Camera error',
+        message: 'Could not capture this photo.',
+      });
     }
   };
 
   const validateStep = () => {
     if (step === 1) {
       if (!businessName.trim() || !ownerName.trim() || !contact.trim()) {
-        Alert.alert(
-          'Missing information',
-          'Enter the business name, owner name and contact number.',
-        );
+        showDialog({
+          type: 'warning',
+          title: 'Missing information',
+          message:
+            'Enter the business name, owner name and contact number.',
+        });
         return false;
       }
 
@@ -139,10 +149,12 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
 
     if (step === 2) {
       if (photos.some((photo) => photo === null)) {
-        Alert.alert(
-          'Three photos required',
-          'Capture the entry, signage and wide-shot photos before continuing.',
-        );
+        showDialog({
+          type: 'warning',
+          title: 'Three photos required',
+          message:
+            'Capture the entry, signage and wide-shot photos before continuing.',
+        });
         return false;
       }
 
@@ -158,10 +170,12 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
       Number(price) < 0 ||
       Number(capacity) < 1
     ) {
-      Alert.alert(
-        'Check spot details',
-        'Enter a valid hourly price, operating hours and capacity.',
-      );
+      showDialog({
+        type: 'warning',
+        title: 'Check spot details',
+        message:
+          'Enter a valid hourly price, operating hours and capacity.',
+      });
       return false;
     }
 
@@ -269,9 +283,10 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
       }
 
       if (!response.ok) {
-        Alert.alert(
-          'Claim Debug Information',
-          [
+        showDialog({
+          type: 'error',
+          title: 'Claim Debug Information',
+          message: [
             `HTTP Status: ${response.status}`,
             '',
             `Spot ID: ${claimPayload.spot_id}`,
@@ -282,21 +297,30 @@ export default function ClaimSpotScreen({ route, navigation }: Props) {
             '',
             `Backend response:\n${responseText || 'Empty response'}`,
           ].join('\n'),
-        );
+        });
 
         return;
       }
 
-      Alert.alert(
-        'Claim submitted',
-        'Your parking spot claim has been submitted.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }],
-      );
+      showDialog({
+        type: 'success',
+        title: 'Claim submitted',
+        message: 'Your parking spot claim has been submitted.',
+        actions: [
+          {
+            label: 'OK',
+            variant: 'primary',
+            onPress: () => navigation.goBack(),
+          },
+        ],
+      });
     } catch (error) {
-      Alert.alert(
-        'Could not submit claim',
-        error instanceof Error ? error.message : 'Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Could not submit claim',
+        message:
+          error instanceof Error ? error.message : 'Please try again.',
+      });
     } finally {
       setLoading(false);
     }

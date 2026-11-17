@@ -1,7 +1,7 @@
+
 import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   RefreshControl,
   ScrollView,
@@ -22,6 +22,7 @@ import {
   type OwnerListing,
 } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDialog } from '../contexts/DialogContext';
 import VerificationBadge from '../components/VerificationBadge';
 import PrimaryButton from '../components/ui/PrimaryButton';
 import {
@@ -53,6 +54,7 @@ const statusLabels: Record<ListingDetails['availability_status'], string> = {
 
 export default function MyListingsScreen({ navigation }: Props) {
   const { colors } = useTheme();
+  const { showDialog } = useDialog();
 
   const [listings, setListings] = useState<OwnerSpot[]>([]);
   const [loading, setLoading] = useState(true);
@@ -182,10 +184,12 @@ export default function MyListingsScreen({ navigation }: Props) {
       available < 0 ||
       available > total
     ) {
-      Alert.alert(
-        'Invalid availability',
-        'Enter a valid total number of slots and available slots. Available slots cannot exceed total slots.'
-      );
+      showDialog({
+        type: 'warning',
+        title: 'Invalid availability',
+        message:
+          'Enter a valid total number of slots and available slots. Available slots cannot exceed total slots.',
+      });
       return;
     }
 
@@ -276,12 +280,14 @@ export default function MyListingsScreen({ navigation }: Props) {
         return next;
       });
     } catch (error) {
-      Alert.alert(
-        'Update failed',
-        error instanceof Error
-          ? error.message
-          : 'Could not update availability. Please try again.'
-      );
+      showDialog({
+        type: 'error',
+        title: 'Update failed',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not update availability. Please try again.',
+      });
     } finally {
       setSavingSpotId(null);
     }

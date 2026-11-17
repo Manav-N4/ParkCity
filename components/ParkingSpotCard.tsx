@@ -1,7 +1,6 @@
 
 import { useCallback, useRef, useState } from 'react';
 import {
-  Alert,
   Animated,
   ImageBackground,
   Pressable,
@@ -21,6 +20,7 @@ import {
 import type { ParkingSpot } from '../types/parking';
 import { getSavedSpots, toggleSavedSpot } from '../lib/api';
 import { supabase } from '../lib/supabase';
+import { useDialog } from '../contexts/DialogContext';
 
 type ParkingSpotCardProps = {
   spot: ParkingSpot;
@@ -43,6 +43,7 @@ export default function ParkingSpotCard({
   isInitiallySaved,
   onSavedChange,
 }: ParkingSpotCardProps) {
+  const { showDialog } = useDialog();
   const [isSaved, setIsSaved] = useState(isInitiallySaved ?? false);
   const [isSaving, setIsSaving] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
@@ -109,10 +110,14 @@ export default function ParkingSpotCard({
       console.log('[ParkCity] ParkingDetails navigation dispatched');
     } catch (error) {
       console.error('[ParkCity] Navigation failed:', error);
-      Alert.alert(
-        'Navigation error',
-        error instanceof Error ? error.message : 'Unable to open parking details.'
-      );
+      showDialog({
+        type: 'error',
+        title: 'Navigation error',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Unable to open parking details.',
+      });
     }
   };
 
@@ -131,10 +136,12 @@ export default function ParkingSpotCard({
     if (isSaving) return;
 
     if (!hasValidSpotId || !spot.id) {
-      Alert.alert(
-        'Cannot save this spot',
-        'This parking spot is temporarily unavailable for saving. Please try again later.'
-      );
+      showDialog({
+        type: 'warning',
+        title: 'Cannot save this spot',
+        message:
+          'This parking spot is temporarily unavailable for saving. Please try again later.',
+      });
       return;
     }
 
@@ -149,10 +156,11 @@ export default function ParkingSpotCard({
       if (error) throw error;
 
       if (!session?.access_token) {
-        Alert.alert(
-          'Sign in required',
-          'Please sign in to save your favourite parking spots.'
-        );
+        showDialog({
+          type: 'warning',
+          title: 'Sign in required',
+          message: 'Please sign in to save your favourite parking spots.',
+        });
         return;
       }
 
@@ -172,10 +180,12 @@ export default function ParkingSpotCard({
     } catch (error) {
       console.error('Could not update saved spot:', error);
 
-      Alert.alert(
-        'Unable to update saved spots',
-        error instanceof Error ? error.message : 'Please try again.'
-      );
+      showDialog({
+        type: 'error',
+        title: 'Unable to update saved spots',
+        message:
+          error instanceof Error ? error.message : 'Please try again.',
+      });
     } finally {
       setIsSaving(false);
     }

@@ -1,7 +1,6 @@
 
 import { useState } from 'react';
 import {
-  Alert,
   Pressable,
   StyleSheet,
   Text,
@@ -12,6 +11,7 @@ import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
 
 import { useTheme } from '../contexts/ThemeContext';
+import { useDialog } from '../contexts/DialogContext';
 import { spacing, radius, typography, fontWeight } from '../constants/tokens';
 import { supabase } from '../lib/supabase';
 import type { RootStackParamList } from '../App';
@@ -22,6 +22,7 @@ type Props = NativeStackScreenProps<RootStackParamList, 'EmailLogin'>;
 
 export default function EmailLoginScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
+  const { showDialog } = useDialog();
   const [loading, setLoading] = useState(false);
 
   async function signInWithGoogle() {
@@ -43,12 +44,20 @@ export default function EmailLoginScreen({ navigation, route }: Props) {
       });
 
       if (error) {
-        Alert.alert('Google sign-in failed', error.message);
+        showDialog({
+          type: 'error',
+          title: 'Google sign-in failed',
+          message: error.message,
+        });
         return;
       }
 
       if (!data.url) {
-        Alert.alert('Something went wrong', 'Could not start Google sign-in.');
+        showDialog({
+          type: 'error',
+          title: 'Something went wrong',
+          message: 'Could not start Google sign-in.',
+        });
         return;
       }
 
@@ -69,10 +78,12 @@ export default function EmailLoginScreen({ navigation, route }: Props) {
       const code = parsedUrl.queryParams?.code;
 
       if (typeof code !== 'string') {
-        Alert.alert(
-          'Sign-in incomplete',
-          'Could not retrieve your Google authentication code. Please try again.',
-        );
+        showDialog({
+          type: 'error',
+          title: 'Sign-in incomplete',
+          message:
+            'Could not retrieve your Google authentication code. Please try again.',
+        });
         return;
       }
 
@@ -80,7 +91,11 @@ export default function EmailLoginScreen({ navigation, route }: Props) {
         await supabase.auth.exchangeCodeForSession(code);
 
       if (sessionError) {
-        Alert.alert('Sign-in failed', sessionError.message);
+        showDialog({
+          type: 'error',
+          title: 'Sign-in failed',
+          message: sessionError.message,
+        });
         return;
       }
 
@@ -115,10 +130,12 @@ export default function EmailLoginScreen({ navigation, route }: Props) {
         });
       }
     } catch (error) {
-      Alert.alert(
-        'Something went wrong',
-        error instanceof Error ? error.message : 'Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Something went wrong',
+        message:
+          error instanceof Error ? error.message : 'Please try again.',
+      });
     } finally {
       setLoading(false);
     }

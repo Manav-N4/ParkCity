@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   StyleSheet,
   TextInput,
-  Alert,
   ScrollView,
   Image,
   ActivityIndicator,
@@ -16,6 +15,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../App'
 import { useTheme } from '../contexts/ThemeContext'
+import { useDialog } from '../contexts/DialogContext'
 import { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import VerificationBadge from '../components/VerificationBadge'
@@ -45,6 +45,7 @@ type Profile = {
 
 export default function ProfileScreen() {
   const { colors } = useTheme()
+  const { showDialog } = useDialog()
   const navigation = useNavigation<Nav>()
 
   const [profile, setProfile] = useState<Profile | null>(null)
@@ -83,7 +84,10 @@ export default function ProfileScreen() {
         console.warn('profile fetch failed:', res.status)
       }
 
-      const avatarWithBust = data?.avatar_url ? `${data.avatar_url}?t=${Date.now()}` : null
+      const avatarWithBust = data?.avatar_url
+        ? `${data.avatar_url}?t=${Date.now()}`
+        : null
+
       setProfile({
         id: data?.id ?? session.user.id,
         name: data?.name ?? 'ParkCity User',
@@ -137,13 +141,24 @@ export default function ProfileScreen() {
         },
         body: JSON.stringify({ name: nameInput }),
       })
+
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
+
       setProfile((p) => p ? { ...p, name: nameInput } : p)
       setEditingName(false)
-      Alert.alert('Saved', 'Your name has been updated')
+
+      showDialog({
+        type: 'success',
+        title: 'Name updated',
+        message: 'Your name has been updated successfully.',
+      })
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Could not save name')
+      showDialog({
+        type: 'error',
+        title: 'Update failed',
+        message: e instanceof Error ? e.message : 'Could not save name.',
+      })
     }
   }
 
@@ -154,6 +169,7 @@ export default function ProfileScreen() {
       aspect: [1, 1] as [number, number],
       quality: 0.8,
     })
+
     if (result.canceled) return
 
     setAvatarLoading(true)
@@ -162,7 +178,7 @@ export default function ProfileScreen() {
       if (!session) return
 
       const uri = result.assets[0].uri
-      const ext = uri.split('.').pop()?.toLowerCase() ?? 'jpg'
+
       // Fixed path so re-upload always replaces the same object in the bucket
       const path = `${session.user.id}/avatar.jpg`
 
@@ -176,6 +192,7 @@ export default function ProfileScreen() {
       if (uploadError) throw uploadError
 
       const { data: urlData } = supabase.storage.from('avatars').getPublicUrl(path)
+
       // Clean URL stored in DB, busted URL shown in UI
       const cleanUrl = urlData.publicUrl
       const displayUrl = `${cleanUrl}?t=${Date.now()}`
@@ -191,31 +208,52 @@ export default function ProfileScreen() {
 
       setProfile((p) => p ? { ...p, avatar_url: displayUrl } : p)
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Could not update avatar')
+      showDialog({
+        type: 'error',
+        title: 'Avatar update failed',
+        message: e instanceof Error ? e.message : 'Could not update avatar.',
+      })
     } finally {
       setAvatarLoading(false)
     }
   }
 
   const signOut = () => {
-    Alert.alert('Sign out', 'Are you sure you want to sign out of ParkCity?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Sign out',
-        style: 'destructive',
-        onPress: async () => {
-          setSigningOut(true)
-          try {
-            await supabase.auth.signOut()
-            navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })
-          } catch (e) {
-            Alert.alert('Error', 'Could not sign out. Try again.')
-          } finally {
-            setSigningOut(false)
-          }
+    showDialog({
+      type: 'confirmation',
+      title: 'Sign out?',
+      message: 'Are you sure you want to sign out of ParkCity?',
+      actions: [
+        {
+          label: 'Cancel',
+          variant: 'secondary',
         },
-      },
-    ])
+        {
+          label: 'Sign out',
+          variant: 'destructive',
+          onPress: async () => {
+            setSigningOut(true)
+            try {
+              const { error } = await supabase.auth.signOut()
+              if (error) throw error
+
+              navigation.reset({
+                index: 0,
+                routes: [{ name: 'MainTabs' }],
+              })
+            } catch {
+              showDialog({
+                type: 'error',
+                title: 'Sign out failed',
+                message: 'Could not sign out. Please try again.',
+              })
+            } finally {
+              setSigningOut(false)
+            }
+          },
+        },
+      ],
+    })
   }
 
   const initials = profile?.name
@@ -233,31 +271,47 @@ export default function ProfileScreen() {
     >
       {/* Avatar + Name */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => void changeAvatar()} disabled={avatarLoading}>
+        <TouchableOpacity
+          onPress={() => void changeAvatar()}
+          disabled={avatarLoading}
+        >
           {avatarLoading ? (
             <ActivityIndicator style={styles.avatar} color={colors.primary} />
           ) : profile?.avatar_url ? (
             <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
           ) : (
-            <View style={[styles.avatar, styles.avatarPlaceholder, { backgroundColor: colors.surface }]}>
+            <View
+              style={[
+                styles.avatar,
+                styles.avatarPlaceholder,
+                { backgroundColor: colors.surface },
+              ]}
+            >
               <Text style={[styles.avatarInitial, { color: colors.primary }]}>
                 {loading ? '' : initials}
               </Text>
             </View>
           )}
-          <Text style={[styles.changePhoto, { color: colors.primary }]}>Change Photo</Text>
+          <Text style={[styles.changePhoto, { color: colors.primary }]}>
+            Change Photo
+          </Text>
         </TouchableOpacity>
 
         {editingName ? (
           <View style={styles.nameRow}>
             <TextInput
-              style={[styles.nameInput, { color: colors.text, borderColor: colors.border }]}
+              style={[
+                styles.nameInput,
+                { color: colors.text, borderColor: colors.border },
+              ]}
               value={nameInput}
               onChangeText={setNameInput}
               autoFocus
             />
             <TouchableOpacity onPress={() => void saveName()}>
-              <Text style={[styles.saveBtn, { color: colors.primary }]}>Save</Text>
+              <Text style={[styles.saveBtn, { color: colors.primary }]}>
+                Save
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -265,11 +319,16 @@ export default function ProfileScreen() {
             <Text style={[styles.name, { color: colors.text }]}>
               {loading ? 'Loading…' : (profile?.name ?? 'Your Name')}
             </Text>
-            <Text style={[styles.editHint, { color: colors.textSecondary }]}>Tap to edit</Text>
+            <Text style={[styles.editHint, { color: colors.textSecondary }]}>
+              Tap to edit
+            </Text>
           </TouchableOpacity>
         )}
 
-        <Text style={[styles.email, { color: colors.textSecondary }]}>{profile?.email}</Text>
+        <Text style={[styles.email, { color: colors.textSecondary }]}>
+          {profile?.email}
+        </Text>
+
         {profile?.created_at && (
           <Text style={[styles.joined, { color: colors.textSecondary }]}>
             Joined{' '}
@@ -282,7 +341,10 @@ export default function ProfileScreen() {
       </View>
 
       {/* My Listings */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>My Listings</Text>
+      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+        My Listings
+      </Text>
+
       {listingsLoading ? (
         <View style={{ paddingHorizontal: spacing.md }}>
           <SkeletonCard />
@@ -294,11 +356,20 @@ export default function ProfileScreen() {
             You haven't listed any parking spots yet.
           </Text>
           <TouchableOpacity
-            style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: spacing.md }]}
+            style={[
+              styles.actionRow,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                marginHorizontal: spacing.md,
+              },
+            ]}
             onPress={() => navigation.navigate('CreateListing')}
             activeOpacity={0.75}
           >
-            <Text style={[styles.actionLabel, { color: colors.primary }]}>+ List a Parking Spot</Text>
+            <Text style={[styles.actionLabel, { color: colors.primary }]}>
+              + List a Parking Spot
+            </Text>
           </TouchableOpacity>
         </>
       ) : (
@@ -306,69 +377,107 @@ export default function ProfileScreen() {
           {listings.map((spot) => (
             <TouchableOpacity
               key={spot.id}
-              style={[styles.listingRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              style={[
+                styles.listingRow,
+                { backgroundColor: colors.surface, borderColor: colors.border },
+              ]}
               onPress={() => navigation.navigate('SpotDetail', { spotId: spot.id })}
               activeOpacity={0.75}
             >
               <View style={{ flex: 1 }}>
-                <Text style={[styles.listingName, { color: colors.text }]}>{spot.name}</Text>
+                <Text style={[styles.listingName, { color: colors.text }]}>
+                  {spot.name}
+                </Text>
                 {spot.address && (
                   <Text style={[styles.listingAddress, { color: colors.textSecondary }]}>
                     {spot.address}
                   </Text>
                 )}
               </View>
+
               {spot.ownership_status === 'pending' ? (
-                <Text style={[styles.pendingBadge, { color: colors.warning }]}>Pending review</Text>
+                <Text style={[styles.pendingBadge, { color: colors.warning }]}>
+                  Pending review
+                </Text>
               ) : (
                 <VerificationBadge tier={spot.verification_tier} />
               )}
             </TouchableOpacity>
           ))}
+
           <TouchableOpacity
-            style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: spacing.md }]}
+            style={[
+              styles.actionRow,
+              {
+                backgroundColor: colors.surface,
+                borderColor: colors.border,
+                marginHorizontal: spacing.md,
+              },
+            ]}
             onPress={() => navigation.navigate('CreateListing')}
             activeOpacity={0.75}
           >
-            <Text style={[styles.actionLabel, { color: colors.primary }]}>+ Add Another Spot</Text>
+            <Text style={[styles.actionLabel, { color: colors.primary }]}>
+              + Add Another Spot
+            </Text>
           </TouchableOpacity>
         </>
       )}
 
       {/* Account actions */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Account</Text>
+      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
+        Account
+      </Text>
 
       <TouchableOpacity
-        style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[
+          styles.actionRow,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
         onPress={() => navigation.navigate('Settings')}
         activeOpacity={0.75}
       >
-        <Text style={[styles.actionLabel, { color: colors.text }]}>Settings</Text>
+        <Text style={[styles.actionLabel, { color: colors.text }]}>
+          Settings
+        </Text>
         <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
-        style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[
+          styles.actionRow,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
         onPress={() => navigation.navigate('Legal')}
         activeOpacity={0.75}
       >
-        <Text style={[styles.actionLabel, { color: colors.text }]}>Privacy & Legal</Text>
+        <Text style={[styles.actionLabel, { color: colors.text }]}>
+          Privacy & Legal
+        </Text>
         <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
       </TouchableOpacity>
 
       {isAdmin && (
         <TouchableOpacity
-          style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+          style={[
+            styles.actionRow,
+            { backgroundColor: colors.surface, borderColor: colors.border },
+          ]}
           onPress={() => navigation.navigate('AdminPayments')}
           activeOpacity={0.75}
         >
-          <Text style={[styles.actionLabel, { color: colors.text }]}>Merchant Payments</Text>
+          <Text style={[styles.actionLabel, { color: colors.text }]}>
+            Merchant Payments
+          </Text>
           <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
         </TouchableOpacity>
       )}
 
       <TouchableOpacity
-        style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+        style={[
+          styles.actionRow,
+          { backgroundColor: colors.surface, borderColor: colors.border },
+        ]}
         onPress={signOut}
         disabled={signingOut}
         activeOpacity={0.75}
@@ -376,7 +485,9 @@ export default function ProfileScreen() {
         {signingOut ? (
           <ActivityIndicator color={colors.error} />
         ) : (
-          <Text style={[styles.actionLabel, { color: colors.error }]}>Sign Out</Text>
+          <Text style={[styles.actionLabel, { color: colors.error }]}>
+            Sign Out
+          </Text>
         )}
       </TouchableOpacity>
     </ScrollView>
@@ -389,6 +500,7 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
+    paddingTop: 48,
     paddingVertical: 28,
     paddingHorizontal: spacing.lg,
   },
