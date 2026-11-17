@@ -28,7 +28,9 @@ import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import { spacing, fontWeight } from '../constants/tokens';
 
-import ParkingSpotCard from '../components/ParkingSpotCard';
+import ParkingSpotCard from '../components/ParkingSpotCard'
+import SkeletonCard from '../components/ui/SkeletonCard'
+import EmptyState from '../components/ui/EmptyState'
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Saved'>,
@@ -167,14 +169,10 @@ export default function SavedScreen({ navigation }: Props) {
       </View>
 
       {loading ? (
-        <View style={styles.centerState}>
-          <ActivityIndicator
-            size="large"
-            color={colors.primary}
-          />
-          <Text style={[styles.stateText, { color: colors.textSecondary }]}>
-            Loading saved spots...
-          </Text>
+        <View style={[styles.list, { paddingTop: 8 }]}>
+          <SkeletonCard />
+          <SkeletonCard />
+          <SkeletonCard />
         </View>
       ) : !isSignedIn ? (
         <View style={styles.centerState}>
@@ -225,11 +223,11 @@ export default function SavedScreen({ navigation }: Props) {
           </Pressable>
         </View>
       ) : savedSpots.length === 0 ? (
-        <View style={styles.centerState}>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            No saved spots yet — start exploring
-          </Text>
-        </View>
+        <EmptyState
+          icon="bookmark-outline"
+          heading="No saved spots yet"
+          subtext="Start exploring and save your favourite parking spots here."
+        />
       ) : (
         <ScrollView
           contentContainerStyle={styles.list}
