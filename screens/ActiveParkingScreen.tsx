@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -15,6 +14,7 @@ import type { RootStackParamList } from '../App';
 import { checkOutFromSpot } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDialog } from '../contexts/DialogContext';
 import { spacing, fontWeight } from '../constants/tokens';
 
 type Props = NativeStackScreenProps<
@@ -43,25 +43,27 @@ export default function ActiveParkingScreen({
 }: Props) {
   const { session } = route.params;
   const { colors } = useTheme();
+  const { showDialog } = useDialog();
 
   const [checkingOut, setCheckingOut] = useState(false);
 
   const handleCheckout = () => {
-    Alert.alert(
-      'End parking session?',
-      'Are you sure you have left this parking spot?',
-      [
+    showDialog({
+      type: 'confirmation',
+      title: 'End parking session?',
+      message: 'Are you sure you have left this parking spot?',
+      actions: [
         {
-          text: 'Cancel',
-          style: 'cancel',
+          label: 'Cancel',
+          variant: 'secondary',
         },
         {
-          text: 'Yes, I have left',
-          style: 'destructive',
+          label: 'Yes, I have left',
+          variant: 'destructive',
           onPress: confirmCheckout,
         },
       ],
-    );
+    });
   };
 
   const confirmCheckout = async () => {
@@ -91,12 +93,13 @@ export default function ActiveParkingScreen({
           ? 'Cost unavailable'
           : `Estimated cost: ₹${result.estimated_cost.toFixed(2)}`;
 
-      Alert.alert(
-        'Parking session completed',
-        `Duration: ${result.duration_minutes} minutes\n${cost}`,
-        [
+      showDialog({
+        type: 'success',
+        title: 'Parking session completed',
+        message: `Duration: ${result.duration_minutes} minutes\n${cost}`,
+        actions: [
           {
-            text: 'Done',
+            label: 'Done',
             onPress: () => {
               navigation.navigate('Satisfaction', {
                 spotId: session.spot_id,
@@ -105,14 +108,16 @@ export default function ActiveParkingScreen({
             },
           },
         ],
-      );
+      });
     } catch (error) {
-      Alert.alert(
-        'Checkout failed',
-        error instanceof Error
-          ? error.message
-          : 'Could not end your parking session. Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Checkout failed',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not end your parking session. Please try again.',
+      });
     } finally {
       setCheckingOut(false);
     }

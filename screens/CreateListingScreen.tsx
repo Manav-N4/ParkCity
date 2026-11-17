@@ -6,7 +6,6 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Alert,
   ScrollView,
   ActivityIndicator,
 } from 'react-native'
@@ -15,6 +14,7 @@ import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../App'
 import { useTheme } from '../contexts/ThemeContext'
+import { useDialog } from '../contexts/DialogContext'
 import { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { spacing, fontWeight } from '../constants/tokens'
@@ -23,6 +23,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>
 
 export default function CreateListingScreen() {
   const { colors } = useTheme()
+  const { showDialog } = useDialog()
   const navigation = useNavigation<Nav>()
 
   const [name, setName] = useState('')
@@ -68,7 +69,11 @@ export default function CreateListingScreen() {
 
   const submit = async () => {
     if (!name || !lat || !lng) {
-      Alert.alert('Required', 'Name, latitude and longitude are required')
+      showDialog({
+        type: 'warning',
+        title: 'Required',
+        message: 'Name, latitude and longitude are required',
+      })
       return
     }
     setLoading(true)
@@ -100,11 +105,24 @@ export default function CreateListingScreen() {
       const data = await res.json()
       if (!res.ok) throw new Error(data.error)
 
-      Alert.alert('Submitted', 'Your spot has been submitted for review', [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ])
+      showDialog({
+        type: 'success',
+        title: 'Submitted',
+        message: 'Your spot has been submitted for review',
+        actions: [
+          {
+            label: 'OK',
+            variant: 'primary',
+            onPress: () => navigation.goBack(),
+          },
+        ],
+      })
     } catch (e) {
-      Alert.alert('Error', e instanceof Error ? e.message : 'Something went wrong')
+      showDialog({
+        type: 'error',
+        title: 'Error',
+        message: e instanceof Error ? e.message : 'Something went wrong',
+      })
     } finally {
       setLoading(false)
     }
@@ -238,4 +256,3 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
 })
-

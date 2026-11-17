@@ -1,7 +1,6 @@
 
 import { useEffect, useRef, useState } from 'react';
 import {
-  Alert,
   StyleSheet,
   Text,
   View,
@@ -9,6 +8,7 @@ import {
 import * as Clipboard from 'expo-clipboard';
 
 import { useTheme } from '../contexts/ThemeContext';
+import { useDialog } from '../contexts/DialogContext';
 import {
   fontWeight,
   radius,
@@ -30,6 +30,7 @@ export default function DealCard({
   accessToken,
 }: DealCardProps) {
   const { colors } = useTheme();
+  const { showDialog } = useDialog();
 
   const [redemptionCode, setRedemptionCode] = useState<string | null>(null);
   const [isRedeeming, setIsRedeeming] = useState(false);
@@ -83,12 +84,14 @@ export default function DealCard({
     } catch (error) {
       console.error('[ParkCity] Deal redemption/copy failed:', error);
 
-      Alert.alert(
-        'Unable to redeem offer',
-        error instanceof Error
-          ? error.message
-          : 'Please try again later.'
-      );
+      showDialog({
+        type: 'error',
+        title: 'Unable to redeem offer',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Please try again later.',
+      });
     } finally {
       setIsRedeeming(false);
     }

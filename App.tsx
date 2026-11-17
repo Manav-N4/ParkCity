@@ -8,6 +8,7 @@ import {
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import * as Notifications from 'expo-notifications';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import MainTabNavigator from './navigation/MainTabNavigator';
 
@@ -23,15 +24,16 @@ import SatisfactionScreen from './screens/SatisfactionScreen';
 import AdminPaymentScreen from './screens/AdminPaymentScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import LegalScreen from './screens/LegalScreen';
-import CreateListingScreen from './screens/CreateListingScreen'
-import ConsentScreen from './screens/ConsentScreen'
+import CreateListingScreen from './screens/CreateListingScreen';
+import ConsentScreen from './screens/ConsentScreen';
 
 import FeedbackBubble from './components/FeedbackBubble';
 
+import { ThemeProvider } from './contexts/ThemeContext';
+import { DialogProvider } from './contexts/DialogContext';
+
 import type { ParkingSpot } from './types/parking';
 import type { ParkingHistoryItem } from './lib/api';
-import { ThemeProvider } from './contexts/ThemeContext'
-import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export type RootStackParamList = {
   MainTabs: undefined;
@@ -68,10 +70,10 @@ export type RootStackParamList = {
   AdminPayments: undefined;
   Settings: undefined;
   Legal: undefined;
-  SpotDetail: { spotId: string }
-  CreateListing: undefined
-  Consent: undefined
-}
+  SpotDetail: { spotId: string };
+  CreateListing: undefined;
+  Consent: undefined;
+};
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -168,112 +170,114 @@ export default function App() {
       pendingNotificationResponse.current = null;
     }
 
-    // Redirect to consent screen on first launch
-    AsyncStorage.getItem('consent_given').then((val) => {
-      if (!val && navigationRef.isReady()) {
-        navigationRef.navigate('Consent')
-      }
-    }).catch(() => {})
+    // Redirect to consent screen on first launch.
+    AsyncStorage.getItem('consent_given')
+      .then((val) => {
+        if (!val && navigationRef.isReady()) {
+          navigationRef.navigate('Consent');
+        }
+      })
+      .catch(() => {});
 
     const routeName = navigationRef.getCurrentRoute()?.name;
-
     setCurrentRouteName(routeName);
   };
 
   // Track navigation changes to hide the bubble on Satisfaction.
   const handleNavigationStateChange = () => {
     const routeName = navigationRef.getCurrentRoute()?.name;
-
     setCurrentRouteName(routeName);
   };
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <ThemeProvider>
-        <>
-          <NavigationContainer
-            ref={navigationRef}
-            onReady={handleNavigationReady}
-            onStateChange={handleNavigationStateChange}
-          >
-            <Stack.Navigator
-              initialRouteName="MainTabs"
-              screenOptions={{ headerShown: false }}
+        <DialogProvider>
+          <>
+            <NavigationContainer
+              ref={navigationRef}
+              onReady={handleNavigationReady}
+              onStateChange={handleNavigationStateChange}
             >
-              <Stack.Screen
-                name="MainTabs"
-                component={MainTabNavigator}
-              />
-              <Stack.Screen
-                name="ParkingDetails"
-                component={ParkingDetailsScreen}
-              />
-              <Stack.Screen
-                name="ActiveParking"
-                component={ActiveParkingScreen}
-              />
-              <Stack.Screen
-                name="ClaimSpot"
-                component={ClaimSpotScreen}
-              />
-              <Stack.Screen
-                name="ReportIssue"
-                component={ReportIssueScreen}
-              />
-              <Stack.Screen
-                name="EmailLogin"
-                component={EmailLoginScreen}
-              />
-              <Stack.Screen
-                name="MyListings"
-                component={MyListingsScreen}
-              />
-              <Stack.Screen
-                name="ThemeTest"
-                component={ThemeTestScreen}
-              />
-              <Stack.Screen
-                name="SetReminder"
-                component={SetReminderScreen}
-              />
-              <Stack.Screen
-                name="Satisfaction"
-                component={SatisfactionScreen}
-                options={{
-                  presentation: 'modal',
-                  headerShown: false,
-                }}
-              />
-              <Stack.Screen
-                name="AdminPayments"
-                component={AdminPaymentScreen}
-              />
-              <Stack.Screen
-                name="Settings"
-                component={SettingsScreen}
-              />
-              <Stack.Screen
-                name="Legal"
-                component={LegalScreen}
-              />
-              <Stack.Screen
-                name="CreateListing"
-                component={CreateListingScreen}
-              />
-              <Stack.Screen
-                name="Consent"
-                component={ConsentScreen}
-              />
-            </Stack.Navigator>
-          </NavigationContainer>
+              <Stack.Navigator
+                initialRouteName="MainTabs"
+                screenOptions={{ headerShown: false }}
+              >
+                <Stack.Screen
+                  name="MainTabs"
+                  component={MainTabNavigator}
+                />
+                <Stack.Screen
+                  name="ParkingDetails"
+                  component={ParkingDetailsScreen}
+                />
+                <Stack.Screen
+                  name="ActiveParking"
+                  component={ActiveParkingScreen}
+                />
+                <Stack.Screen
+                  name="ClaimSpot"
+                  component={ClaimSpotScreen}
+                />
+                <Stack.Screen
+                  name="ReportIssue"
+                  component={ReportIssueScreen}
+                />
+                <Stack.Screen
+                  name="EmailLogin"
+                  component={EmailLoginScreen}
+                />
+                <Stack.Screen
+                  name="MyListings"
+                  component={MyListingsScreen}
+                />
+                <Stack.Screen
+                  name="ThemeTest"
+                  component={ThemeTestScreen}
+                />
+                <Stack.Screen
+                  name="SetReminder"
+                  component={SetReminderScreen}
+                />
+                <Stack.Screen
+                  name="Satisfaction"
+                  component={SatisfactionScreen}
+                  options={{
+                    presentation: 'modal',
+                    headerShown: false,
+                  }}
+                />
+                <Stack.Screen
+                  name="AdminPayments"
+                  component={AdminPaymentScreen}
+                />
+                <Stack.Screen
+                  name="Settings"
+                  component={SettingsScreen}
+                />
+                <Stack.Screen
+                  name="Legal"
+                  component={LegalScreen}
+                />
+                <Stack.Screen
+                  name="CreateListing"
+                  component={CreateListingScreen}
+                />
+                <Stack.Screen
+                  name="Consent"
+                  component={ConsentScreen}
+                />
+              </Stack.Navigator>
+            </NavigationContainer>
 
-          {/* Global floating feedback bubble */}
-          <FeedbackBubble
-            hidden={currentRouteName === 'Satisfaction'}
-          />
+            {/* Global floating feedback bubble */}
+            <FeedbackBubble
+              hidden={currentRouteName === 'Satisfaction'}
+            />
 
-          <StatusBar style="auto" />
-        </>
+            <StatusBar style="auto" />
+          </>
+        </DialogProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );

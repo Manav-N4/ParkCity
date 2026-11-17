@@ -1,6 +1,7 @@
 
-import { View, Text, TouchableOpacity, StyleSheet, Linking, Alert } from 'react-native'
+import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native'
 import { useTheme } from '../contexts/ThemeContext'
+import { useDialog } from '../contexts/DialogContext'
 import { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import * as FileSystem from 'expo-file-system/legacy'
@@ -13,6 +14,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>
 
 export default function LegalScreen() {
   const { colors } = useTheme()
+  const { showDialog } = useDialog()
   const navigation = useNavigation<Nav>()
 
   const openURL = (url: string) => void Linking.openURL(url)
@@ -30,19 +32,28 @@ export default function LegalScreen() {
       await FileSystem.writeAsStringAsync(path, JSON.stringify(data, null, 2))
       await Sharing.shareAsync(path)
     } catch (e) {
-      Alert.alert('Error', 'Could not export your data. Try again.')
+      showDialog({
+        type: 'error',
+        title: 'Export Failed',
+        message: 'Could not export your data. Try again.',
+      })
     }
   }
 
   const deleteAccount = () => {
-    Alert.alert(
-      'Delete Account',
-      "This will permanently delete your account and all personal data. Contributions you've made will be anonymised. This cannot be undone.",
-      [
-        { text: 'Cancel', style: 'cancel' },
+    showDialog({
+      type: 'confirmation',
+      title: 'Delete Account',
+      message:
+        "This will permanently delete your account and all personal data. Contributions you've made will be anonymised. This cannot be undone.",
+      actions: [
         {
-          text: 'Delete',
-          style: 'destructive',
+          label: 'Cancel',
+          variant: 'secondary',
+        },
+        {
+          label: 'Delete',
+          variant: 'destructive',
           onPress: async () => {
             try {
               const { data: { session } } = await supabase.auth.getSession()
@@ -52,22 +63,28 @@ export default function LegalScreen() {
                 method: 'DELETE',
                 headers: { Authorization: `Bearer ${session.access_token}` },
               })
+
               if (!res.ok) {
                 const data = await res.json()
                 throw new Error(data.error)
               }
+
               await supabase.auth.signOut()
               navigation.reset({ index: 0, routes: [{ name: 'MainTabs' }] })
             } catch (e) {
-              Alert.alert(
-                'Error',
-                e instanceof Error ? e.message : 'Could not delete account. Try again.',
-              )
+              showDialog({
+                type: 'error',
+                title: 'Error',
+                message:
+                  e instanceof Error
+                    ? e.message
+                    : 'Could not delete account. Try again.',
+              })
             }
           },
         },
       ],
-    )
+    })
   }
 
   return (
@@ -124,7 +141,11 @@ export default function LegalScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
+  container: {
+    flex: 1,
+    padding: 20,
+    paddingTop: 40,
+  },
   sectionLabel: {
     fontSize: 11,
     fontWeight: '700',

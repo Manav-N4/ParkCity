@@ -2,7 +2,6 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -23,6 +22,7 @@ import {
   SATISFACTION_REMINDER_DELAY_SECONDS,
 } from '../lib/feedbackStorage';
 import { supabase } from '../lib/supabase';
+import { useDialog } from '../contexts/DialogContext';
 import {
   colors,
   fontWeight,
@@ -41,6 +41,7 @@ export default function SatisfactionScreen({
   navigation,
 }: Props) {
   const { spotId, sessionId } = route.params;
+  const { showDialog } = useDialog();
 
   // Identifies whether this screen was opened through a reminder notification.
   const isReminder =
@@ -167,10 +168,11 @@ export default function SatisfactionScreen({
 
   const handleSubmit = async () => {
     if (selectedRating < 1 || selectedRating > 5) {
-      Alert.alert(
-        'Rating required',
-        'Please select a star rating before submitting.',
-      );
+      showDialog({
+        type: 'warning',
+        title: 'Rating required',
+        message: 'Please select a star rating before submitting.',
+      });
       return;
     }
 
@@ -191,10 +193,11 @@ export default function SatisfactionScreen({
       }
 
       if (!session?.access_token) {
-        Alert.alert(
-          'Sign in required',
-          'Please sign in again to submit your rating.',
-        );
+        showDialog({
+          type: 'warning',
+          title: 'Sign in required',
+          message: 'Please sign in again to submit your rating.',
+        });
         return;
       }
 
@@ -221,26 +224,29 @@ export default function SatisfactionScreen({
         );
       }
 
-      Alert.alert(
-        'Thank you!',
-        'Your parking experience has been rated.',
-        [
+      showDialog({
+        type: 'success',
+        title: 'Thank you!',
+        message: 'Your parking experience has been rated.',
+        actions: [
           {
-            text: 'Done',
+            label: 'Done',
             onPress: () => navigation.goBack(),
           },
         ],
-        { cancelable: false },
-      );
+        dismissible: false,
+      });
     } catch (error) {
       console.error('Could not submit parking rating:', error);
 
-      Alert.alert(
-        'Rating failed',
-        error instanceof Error
-          ? error.message
-          : 'Could not submit your rating. Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Rating failed',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Could not submit your rating. Please try again.',
+      });
     } finally {
       setIsSubmitting(false);
     }

@@ -2,7 +2,6 @@
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Alert,
   KeyboardAvoidingView,
   Platform,
   Pressable,
@@ -18,6 +17,7 @@ import type { RootStackParamList } from '../App';
 import { setParkingReminder } from '../lib/api';
 import { scheduleParkingReminder } from '../lib/notifications';
 import { useTheme } from '../contexts/ThemeContext';
+import { useDialog } from '../contexts/DialogContext';
 import { spacing, fontWeight } from '../constants/tokens';
 
 type Props = NativeStackScreenProps<
@@ -33,6 +33,7 @@ export default function SetReminderScreen({
 }: Props) {
   const { sessionId, spotName, accessToken } = route.params;
   const { colors } = useTheme();
+  const { showDialog } = useDialog();
 
   const [selectedOption, setSelectedOption] =
     useState<ReminderOption>(15);
@@ -51,10 +52,11 @@ export default function SetReminderScreen({
       !Number.isInteger(reminderMinutes) ||
       reminderMinutes <= 0
     ) {
-      Alert.alert(
-        'Invalid duration',
-        'Please enter a valid number of minutes greater than zero.',
-      );
+      showDialog({
+        type: 'warning',
+        title: 'Invalid duration',
+        message: 'Please enter a valid number of minutes greater than zero.',
+      });
       return;
     }
 
@@ -73,23 +75,26 @@ export default function SetReminderScreen({
         reminderMinutes,
       );
 
-      Alert.alert(
-        'Reminder set!',
-        `We'll remind you about your parking at ${spotName} in ${reminderMinutes} minute${reminderMinutes === 1 ? '' : 's'}.`,
-        [
+      showDialog({
+        type: 'success',
+        title: 'Reminder set!',
+        message: `We'll remind you about your parking at ${spotName} in ${reminderMinutes} minute${reminderMinutes === 1 ? '' : 's'}.`,
+        actions: [
           {
-            text: 'Done',
+            label: 'Done',
             onPress: () => navigation.replace('MainTabs'),
           },
         ],
-      );
+      });
     } catch (error) {
-      Alert.alert(
-        'Could not set reminder',
-        error instanceof Error
-          ? error.message
-          : 'Something went wrong. Please try again.',
-      );
+      showDialog({
+        type: 'error',
+        title: 'Could not set reminder',
+        message:
+          error instanceof Error
+            ? error.message
+            : 'Something went wrong. Please try again.',
+      });
     } finally {
       setSaving(false);
     }
