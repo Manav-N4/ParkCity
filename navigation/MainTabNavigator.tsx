@@ -4,12 +4,16 @@ import { Text } from 'react-native';
 
 import HomeScreen from '../screens/HomeScreen';
 import SavedScreen from '../screens/SavedScreen';
+import ParkingHistoryScreen from '../screens/ParkingHistoryScreen';
+import ProfileScreen from '../screens/ProfileScreen';
 
 import { colors, fontWeight } from '../constants/tokens';
 
 export type MainTabParamList = {
   Home: undefined;
   Saved: undefined;
+  History: undefined;
+  Profile: undefined;
 };
 
 const Tab = createBottomTabNavigator<MainTabParamList>();
@@ -53,6 +57,28 @@ export default function MainTabNavigator() {
           tabBarLabel: 'Saved',
           tabBarIcon: ({ color }) => (
             <Text style={{ color, fontSize: 20 }}>♡</Text>
+          ),
+        }}
+      />
+
+      <Tab.Screen
+        name="History"
+        component={ParkingHistoryScreen}
+        options={{
+          tabBarLabel: 'History',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ color, fontSize: 20 }}>🕐</Text>
+          ),
+        }}
+      />
+
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{
+          tabBarLabel: 'Profile',
+          tabBarIcon: ({ color }) => (
+            <Text style={{ color, fontSize: 20 }}>👤</Text>
           ),
         }}
       />

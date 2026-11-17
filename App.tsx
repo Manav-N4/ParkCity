@@ -12,9 +12,7 @@ import * as Notifications from 'expo-notifications';
 import MainTabNavigator from './navigation/MainTabNavigator';
 
 import ParkingDetailsScreen from './screens/ParkingDetailsScreen';
-import ParkingHistoryScreen from './screens/ParkingHistoryScreen';
 import ActiveParkingScreen from './screens/ActiveParkingScreen';
-import ProfileScreen from './screens/ProfileScreen';
 import ClaimSpotScreen from './screens/ClaimSpotScreen';
 import EmailLoginScreen from './screens/EmailLoginScreen';
 import MyListingsScreen from './screens/MyListingsScreen';
@@ -25,18 +23,19 @@ import SatisfactionScreen from './screens/SatisfactionScreen';
 import AdminPaymentScreen from './screens/AdminPaymentScreen';
 import SettingsScreen from './screens/SettingsScreen';
 import LegalScreen from './screens/LegalScreen';
-import CreateListingScreen from './screens/CreateListingScreen';
+import CreateListingScreen from './screens/CreateListingScreen'
+import ConsentScreen from './screens/ConsentScreen'
 
 import FeedbackBubble from './components/FeedbackBubble';
 
 import type { ParkingSpot } from './types/parking';
 import type { ParkingHistoryItem } from './lib/api';
-import { ThemeProvider } from './contexts/ThemeContext';
+import { ThemeProvider } from './contexts/ThemeContext'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 
 export type RootStackParamList = {
   MainTabs: undefined;
   ParkingDetails: { spot: ParkingSpot };
-  ParkingHistory: undefined;
   ActiveParking: {
     session: ParkingHistoryItem;
   };
@@ -69,9 +68,10 @@ export type RootStackParamList = {
   AdminPayments: undefined;
   Settings: undefined;
   Legal: undefined;
-  SpotDetail: { spotId: string };
-  CreateListing: undefined;
-};
+  SpotDetail: { spotId: string }
+  CreateListing: undefined
+  Consent: undefined
+}
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -168,6 +168,13 @@ export default function App() {
       pendingNotificationResponse.current = null;
     }
 
+    // Redirect to consent screen on first launch
+    AsyncStorage.getItem('consent_given').then((val) => {
+      if (!val && navigationRef.isReady()) {
+        navigationRef.navigate('Consent')
+      }
+    }).catch(() => {})
+
     const routeName = navigationRef.getCurrentRoute()?.name;
 
     setCurrentRouteName(routeName);
@@ -202,16 +209,8 @@ export default function App() {
                 component={ParkingDetailsScreen}
               />
               <Stack.Screen
-                name="ParkingHistory"
-                component={ParkingHistoryScreen}
-              />
-              <Stack.Screen
                 name="ActiveParking"
                 component={ActiveParkingScreen}
-              />
-              <Stack.Screen
-                name="Profile"
-                component={ProfileScreen}
               />
               <Stack.Screen
                 name="ClaimSpot"
@@ -260,6 +259,10 @@ export default function App() {
               <Stack.Screen
                 name="CreateListing"
                 component={CreateListingScreen}
+              />
+              <Stack.Screen
+                name="Consent"
+                component={ConsentScreen}
               />
             </Stack.Navigator>
           </NavigationContainer>

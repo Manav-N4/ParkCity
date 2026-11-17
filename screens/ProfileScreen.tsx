@@ -19,6 +19,7 @@ import { useTheme } from '../contexts/ThemeContext'
 import { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import VerificationBadge from '../components/VerificationBadge'
+import SkeletonCard from '../components/ui/SkeletonCard'
 import type { VerificationTier } from '../types/parking'
 import { spacing, fontWeight } from '../constants/tokens'
 
@@ -53,6 +54,7 @@ export default function ProfileScreen() {
   const [avatarLoading, setAvatarLoading] = useState(false)
   const [isAdmin, setIsAdmin] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [listingsLoading, setListingsLoading] = useState(true)
   const [signingOut, setSigningOut] = useState(false)
 
   // Fast admin check from local session on mount
@@ -98,6 +100,7 @@ export default function ProfileScreen() {
   }, [])
 
   const loadListings = useCallback(async () => {
+    setListingsLoading(true)
     try {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
@@ -109,6 +112,8 @@ export default function ProfileScreen() {
       setListings(Array.isArray(data) ? data : [])
     } catch (e) {
       console.error('load listings error:', e)
+    } finally {
+      setListingsLoading(false)
     }
   }, [])
 
@@ -278,7 +283,12 @@ export default function ProfileScreen() {
 
       {/* My Listings */}
       <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>My Listings</Text>
-      {listings.length === 0 ? (
+      {listingsLoading ? (
+        <View style={{ paddingHorizontal: spacing.md }}>
+          <SkeletonCard />
+          <SkeletonCard />
+        </View>
+      ) : listings.length === 0 ? (
         <>
           <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
             You haven't listed any parking spots yet.
@@ -292,28 +302,37 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </>
       ) : (
-        listings.map((spot) => (
+        <>
+          {listings.map((spot) => (
+            <TouchableOpacity
+              key={spot.id}
+              style={[styles.listingRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
+              onPress={() => navigation.navigate('SpotDetail', { spotId: spot.id })}
+              activeOpacity={0.75}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.listingName, { color: colors.text }]}>{spot.name}</Text>
+                {spot.address && (
+                  <Text style={[styles.listingAddress, { color: colors.textSecondary }]}>
+                    {spot.address}
+                  </Text>
+                )}
+              </View>
+              {spot.ownership_status === 'pending' ? (
+                <Text style={[styles.pendingBadge, { color: colors.warning }]}>Pending review</Text>
+              ) : (
+                <VerificationBadge tier={spot.verification_tier} />
+              )}
+            </TouchableOpacity>
+          ))}
           <TouchableOpacity
-            key={spot.id}
-            style={[styles.listingRow, { backgroundColor: colors.surface, borderColor: colors.border }]}
-            onPress={() => navigation.navigate('SpotDetail', { spotId: spot.id })}
+            style={[styles.actionRow, { backgroundColor: colors.surface, borderColor: colors.border, marginHorizontal: spacing.md }]}
+            onPress={() => navigation.navigate('CreateListing')}
             activeOpacity={0.75}
           >
-            <View style={{ flex: 1 }}>
-              <Text style={[styles.listingName, { color: colors.text }]}>{spot.name}</Text>
-              {spot.address && (
-                <Text style={[styles.listingAddress, { color: colors.textSecondary }]}>
-                  {spot.address}
-                </Text>
-              )}
-            </View>
-            {spot.ownership_status === 'pending' ? (
-              <Text style={[styles.pendingBadge, { color: colors.warning }]}>Pending review</Text>
-            ) : (
-              <VerificationBadge tier={spot.verification_tier} />
-            )}
+            <Text style={[styles.actionLabel, { color: colors.primary }]}>+ Add Another Spot</Text>
           </TouchableOpacity>
-        ))
+        </>
       )}
 
       {/* Account actions */}
