@@ -1,9 +1,9 @@
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import {
   View,
   Text,
-  TouchableOpacity,
+  Pressable,
   StyleSheet,
   TextInput,
   ScrollView,
@@ -11,6 +11,8 @@ import {
   ActivityIndicator,
 } from 'react-native'
 import * as ImagePicker from 'expo-image-picker'
+import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect, useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../App'
@@ -18,14 +20,24 @@ import { useTheme } from '../contexts/ThemeContext'
 import { useDialog } from '../contexts/DialogContext'
 import { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
+import { isAdminEmail } from '../lib/adminAccess'
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll'
 import VerificationBadge from '../components/VerificationBadge'
 import SkeletonCard from '../components/ui/SkeletonCard'
+import ListRow from '../components/ui/ListRow'
+import PrimaryButton from '../components/ui/PrimaryButton'
 import type { VerificationTier } from '../types/parking'
-import { spacing, fontWeight } from '../constants/tokens'
+import {
+  colors as lightColors,
+  fontWeight,
+  letterSpacing,
+  radius,
+  shadow,
+  spacing,
+  typography,
+} from '../constants/tokens'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
-
-const ADMIN_EMAIL = 'nayakmanav04@gmail.com'
 
 type Spot = {
   id: string
@@ -43,8 +55,13 @@ type Profile = {
   created_at: string
 }
 
+const AVATAR_SIZE = 88
+
 export default function ProfileScreen() {
   const { colors } = useTheme()
+  const styles = useMemo(() => createStyles(colors), [colors])
+  const insets = useSafeAreaInsets()
+  const keyboard = useKeyboardAwareScroll()
   const { showDialog } = useDialog()
   const navigation = useNavigation<Nav>()
 
@@ -61,7 +78,7 @@ export default function ProfileScreen() {
   // Fast admin check from local session on mount
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
-      setIsAdmin(session?.user?.email === ADMIN_EMAIL)
+      setIsAdmin(isAdminEmail(session?.user?.email))
     }).catch(() => {})
   }, [])
 
@@ -71,7 +88,7 @@ export default function ProfileScreen() {
       const { data: { session } } = await supabase.auth.getSession()
       if (!session) return
 
-      setIsAdmin(session.user.email === ADMIN_EMAIL)
+      setIsAdmin(isAdminEmail(session.user.email))
 
       const res = await fetch(`${API_BASE_URL}/profile/${session.user.id}`, {
         headers: { Authorization: `Bearer ${session.access_token}` },
@@ -265,72 +282,94 @@ export default function ProfileScreen() {
 
   return (
     <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={styles.container}
+      ref={keyboard.scrollRef}
+      onScroll={keyboard.handleScroll}
+      scrollEventThrottle={16}
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.container,
+        {
+          paddingTop: insets.top + spacing.md,
+          paddingBottom: spacing.xl + keyboard.keyboardHeight,
+        },
+      ]}
+      keyboardShouldPersistTaps="handled"
       showsVerticalScrollIndicator={false}
     >
+      <Text style={styles.screenTitle}>Profile</Text>
+
       {/* Avatar + Name */}
-      <View style={styles.header}>
-        <TouchableOpacity
+      <View style={styles.headerCard}>
+        <Pressable
           onPress={() => void changeAvatar()}
           disabled={avatarLoading}
+          accessibilityRole="button"
+          accessibilityLabel="Change profile photo"
+          style={({ pressed }) => [styles.avatarWrap, pressed && styles.pressed]}
         >
           {avatarLoading ? (
-            <ActivityIndicator style={styles.avatar} color={colors.primary} />
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <ActivityIndicator color={colors.primary} />
+            </View>
           ) : profile?.avatar_url ? (
             <Image source={{ uri: profile.avatar_url }} style={styles.avatar} />
           ) : (
-            <View
-              style={[
-                styles.avatar,
-                styles.avatarPlaceholder,
-                { backgroundColor: colors.surface },
-              ]}
-            >
-              <Text style={[styles.avatarInitial, { color: colors.primary }]}>
+            <View style={[styles.avatar, styles.avatarPlaceholder]}>
+              <Text style={styles.avatarInitial}>
                 {loading ? '' : initials}
               </Text>
             </View>
           )}
-          <Text style={[styles.changePhoto, { color: colors.primary }]}>
-            Change Photo
-          </Text>
-        </TouchableOpacity>
+
+          <View style={styles.cameraBadge}>
+            <Ionicons name="camera" size={14} color={colors.white} />
+          </View>
+        </Pressable>
 
         {editingName ? (
-          <View style={styles.nameRow}>
+          <View style={styles.nameEditRow}>
             <TextInput
-              style={[
-                styles.nameInput,
-                { color: colors.text, borderColor: colors.border },
-              ]}
+              style={styles.nameInput}
               value={nameInput}
               onChangeText={setNameInput}
               autoFocus
+              onFocus={keyboard.revealOnFocus}
+              accessibilityLabel="Your name"
             />
-            <TouchableOpacity onPress={() => void saveName()}>
-              <Text style={[styles.saveBtn, { color: colors.primary }]}>
-                Save
-              </Text>
-            </TouchableOpacity>
+            <Pressable
+              onPress={() => void saveName()}
+              style={({ pressed }) => [styles.saveButton, pressed && styles.pressed]}
+              accessibilityRole="button"
+              accessibilityLabel="Save name"
+            >
+              <Text style={styles.saveButtonText}>Save</Text>
+            </Pressable>
           </View>
         ) : (
-          <TouchableOpacity onPress={() => setEditingName(true)}>
-            <Text style={[styles.name, { color: colors.text }]}>
+          <Pressable
+            onPress={() => setEditingName(true)}
+            style={({ pressed }) => [styles.nameRow, pressed && styles.pressed]}
+            accessibilityRole="button"
+            accessibilityLabel="Edit your name"
+            hitSlop={6}
+          >
+            <Text style={styles.name} numberOfLines={2}>
               {loading ? 'Loading…' : (profile?.name ?? 'Your Name')}
             </Text>
-            <Text style={[styles.editHint, { color: colors.textSecondary }]}>
-              Tap to edit
-            </Text>
-          </TouchableOpacity>
+            <Ionicons
+              name="create-outline"
+              size={17}
+              color={colors.textSecondary}
+            />
+          </Pressable>
         )}
 
-        <Text style={[styles.email, { color: colors.textSecondary }]}>
-          {profile?.email}
-        </Text>
+        {!!profile?.email && (
+          <Text style={styles.email}>{profile.email}</Text>
+        )}
 
-        {profile?.created_at && (
-          <Text style={[styles.joined, { color: colors.textSecondary }]}>
+        {!!profile?.created_at && (
+          <Text style={styles.joined}>
             Joined{' '}
             {new Date(profile.created_at).toLocaleDateString('en-IN', {
               month: 'long',
@@ -341,272 +380,298 @@ export default function ProfileScreen() {
       </View>
 
       {/* My Listings */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-        My Listings
-      </Text>
+      <Text style={styles.sectionLabel}>MY LISTINGS</Text>
 
       {listingsLoading ? (
-        <View style={{ paddingHorizontal: spacing.md }}>
+        <View>
           <SkeletonCard />
           <SkeletonCard />
         </View>
       ) : listings.length === 0 ? (
-        <>
-          <Text style={[styles.emptyText, { color: colors.textSecondary }]}>
+        <View style={styles.card}>
+          <Text style={styles.emptyText}>
             You haven't listed any parking spots yet.
           </Text>
-          <TouchableOpacity
-            style={[
-              styles.actionRow,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                marginHorizontal: spacing.md,
-              },
-            ]}
+          <ListRow
+            icon="add-circle-outline"
+            label="List a Parking Spot"
             onPress={() => navigation.navigate('CreateListing')}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.actionLabel, { color: colors.primary }]}>
-              + List a Parking Spot
-            </Text>
-          </TouchableOpacity>
-        </>
+          />
+        </View>
       ) : (
-        <>
+        <View style={styles.card}>
           {listings.map((spot) => (
-            <TouchableOpacity
+            <Pressable
               key={spot.id}
-              style={[
-                styles.listingRow,
-                { backgroundColor: colors.surface, borderColor: colors.border },
-              ]}
               onPress={() => navigation.navigate('SpotDetail', { spotId: spot.id })}
-              activeOpacity={0.75}
+              style={({ pressed }) => [
+                styles.listingRow,
+                pressed && { backgroundColor: colors.surfaceMuted },
+              ]}
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${spot.name}`}
             >
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.listingName, { color: colors.text }]}>
+              <View style={styles.listingText}>
+                <Text style={styles.listingName} numberOfLines={1}>
                   {spot.name}
                 </Text>
                 {spot.address && (
-                  <Text style={[styles.listingAddress, { color: colors.textSecondary }]}>
+                  <Text style={styles.listingAddress} numberOfLines={1}>
                     {spot.address}
                   </Text>
                 )}
               </View>
 
               {spot.ownership_status === 'pending' ? (
-                <Text style={[styles.pendingBadge, { color: colors.warning }]}>
-                  Pending review
-                </Text>
+                <View style={styles.pendingChip}>
+                  <Text style={styles.pendingChipText}>Pending review</Text>
+                </View>
               ) : (
                 <VerificationBadge tier={spot.verification_tier} />
               )}
-            </TouchableOpacity>
+            </Pressable>
           ))}
 
-          <TouchableOpacity
-            style={[
-              styles.actionRow,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-                marginHorizontal: spacing.md,
-              },
-            ]}
+          <ListRow
+            icon="add-circle-outline"
+            label="Add Another Spot"
             onPress={() => navigation.navigate('CreateListing')}
-            activeOpacity={0.75}
-          >
-            <Text style={[styles.actionLabel, { color: colors.primary }]}>
-              + Add Another Spot
-            </Text>
-          </TouchableOpacity>
-        </>
+            showDivider
+          />
+
+          <ListRow
+            icon="stats-chart-outline"
+            label="Manage availability"
+            subtitle="Views, navigations and available slots"
+            onPress={() => navigation.navigate('MyListings')}
+          />
+        </View>
       )}
 
       {/* Account actions */}
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-        Account
-      </Text>
+      <Text style={styles.sectionLabel}>ACCOUNT</Text>
 
-      <TouchableOpacity
-        style={[
-          styles.actionRow,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-        onPress={() => navigation.navigate('Settings')}
-        activeOpacity={0.75}
-      >
-        <Text style={[styles.actionLabel, { color: colors.text }]}>
-          Settings
-        </Text>
-        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-      </TouchableOpacity>
+      <View style={styles.card}>
+        <ListRow
+          icon="settings-outline"
+          label="Settings"
+          onPress={() => navigation.navigate('Settings')}
+          showDivider
+        />
 
-      <TouchableOpacity
-        style={[
-          styles.actionRow,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-        onPress={() => navigation.navigate('Legal')}
-        activeOpacity={0.75}
-      >
-        <Text style={[styles.actionLabel, { color: colors.text }]}>
-          Privacy & Legal
-        </Text>
-        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-      </TouchableOpacity>
+        <ListRow
+          icon="shield-checkmark-outline"
+          label="Privacy & Legal"
+          onPress={() => navigation.navigate('Legal')}
+          showDivider={isAdmin}
+        />
 
-      {isAdmin && (
-        <TouchableOpacity
-          style={[
-            styles.actionRow,
-            { backgroundColor: colors.surface, borderColor: colors.border },
-          ]}
-          onPress={() => navigation.navigate('AdminPayments')}
-          activeOpacity={0.75}
-        >
-          <Text style={[styles.actionLabel, { color: colors.text }]}>
-            Merchant Payments
-          </Text>
-          <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-        </TouchableOpacity>
-      )}
-
-      <TouchableOpacity
-        style={[
-          styles.actionRow,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-        onPress={signOut}
-        disabled={signingOut}
-        activeOpacity={0.75}
-      >
-        {signingOut ? (
-          <ActivityIndicator color={colors.error} />
-        ) : (
-          <Text style={[styles.actionLabel, { color: colors.error }]}>
-            Sign Out
-          </Text>
+        {isAdmin && (
+          <ListRow
+            icon="card-outline"
+            label="Merchant Payments"
+            subtitle="Admin only"
+            onPress={() => navigation.navigate('AdminPayments')}
+          />
         )}
-      </TouchableOpacity>
+      </View>
+
+      <PrimaryButton
+        title="Sign Out"
+        variant="destructiveOutline"
+        onPress={signOut}
+        loading={signingOut}
+        disabled={signingOut}
+        style={styles.signOutButton}
+      />
     </ScrollView>
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    paddingBottom: 48,
-  },
-  header: {
-    alignItems: 'center',
-    paddingTop: 48,
-    paddingVertical: 28,
-    paddingHorizontal: spacing.lg,
-  },
-  avatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    marginBottom: 8,
-  },
-  avatarPlaceholder: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitial: {
-    fontSize: 32,
-    fontWeight: fontWeight.bold,
-  },
-  changePhoto: {
-    fontSize: 13,
-    fontWeight: fontWeight.semibold,
-    textAlign: 'center',
-    marginBottom: 12,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  nameInput: {
-    borderWidth: 1,
-    borderRadius: 8,
-    padding: 8,
-    fontSize: 18,
-    minWidth: 160,
-  },
-  saveBtn: {
-    fontSize: 15,
-    fontWeight: fontWeight.bold,
-  },
-  name: {
-    fontSize: 20,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
-  editHint: {
-    fontSize: 12,
-    textAlign: 'center',
-    marginTop: 2,
-  },
-  email: {
-    fontSize: 14,
-    marginTop: 6,
-  },
-  joined: {
-    fontSize: 12,
-    marginTop: 4,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 24,
-    marginBottom: 8,
-    marginLeft: spacing.lg,
-  },
-  emptyText: {
-    fontSize: 14,
-    marginHorizontal: spacing.lg,
-    marginBottom: 8,
-  },
-  listingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginHorizontal: spacing.md,
-    marginBottom: 8,
-  },
-  listingName: {
-    fontSize: 15,
-    fontWeight: fontWeight.semibold,
-  },
-  listingAddress: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  pendingBadge: {
-    fontSize: 12,
-    fontWeight: fontWeight.semibold,
-  },
-  actionRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginHorizontal: spacing.md,
-    marginBottom: 8,
-  },
-  actionLabel: {
-    fontSize: 15,
-  },
-  chevron: {
-    fontSize: 18,
-  },
-})
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      paddingHorizontal: spacing.lg,
+    },
+    pressed: {
+      opacity: 0.75,
+    },
+    screenTitle: {
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+      marginBottom: spacing.md,
+    },
+
+    // Header card
+    headerCard: {
+      alignItems: 'center',
+      paddingVertical: spacing.lg,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      ...shadow.sm,
+    },
+    avatarWrap: {
+      marginBottom: 12,
+    },
+    avatar: {
+      width: AVATAR_SIZE,
+      height: AVATAR_SIZE,
+      borderRadius: AVATAR_SIZE / 2,
+      borderWidth: 2,
+      borderColor: colors.champagne,
+    },
+    avatarPlaceholder: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.champagneSoft,
+    },
+    avatarInitial: {
+      color: colors.goldDeep,
+      fontSize: 32,
+      fontWeight: fontWeight.bold,
+    },
+    cameraBadge: {
+      position: 'absolute',
+      right: 0,
+      bottom: 0,
+      width: 30,
+      height: 30,
+      borderRadius: 15,
+      backgroundColor: colors.primary,
+      borderWidth: 2,
+      borderColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    nameRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      maxWidth: '100%',
+    },
+    name: {
+      flexShrink: 1,
+      color: colors.text,
+      fontSize: 21,
+      lineHeight: 27,
+      fontWeight: fontWeight.bold,
+      textAlign: 'center',
+    },
+    nameEditRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      alignSelf: 'stretch',
+      gap: spacing.sm,
+    },
+    nameInput: {
+      flex: 1,
+      minHeight: 46,
+      paddingHorizontal: 14,
+      borderRadius: radius.lg,
+      borderWidth: 1.5,
+      borderColor: colors.primary,
+      backgroundColor: colors.surface,
+      color: colors.text,
+      fontSize: 17,
+    },
+    saveButton: {
+      minHeight: 46,
+      paddingHorizontal: 18,
+      borderRadius: radius.pill,
+      backgroundColor: colors.primary,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    saveButtonText: {
+      color: colors.white,
+      fontSize: 15,
+      fontWeight: fontWeight.semibold,
+    },
+    email: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      marginTop: 6,
+    },
+    joined: {
+      color: colors.textSecondary,
+      fontSize: typography.caption,
+      marginTop: 3,
+    },
+
+    // Sections
+    sectionLabel: {
+      color: colors.goldDeep,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.overline,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+      marginLeft: spacing.xs,
+    },
+    card: {
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      overflow: 'hidden',
+    },
+    emptyText: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      lineHeight: typography.smallLineHeight,
+      paddingHorizontal: spacing.md,
+      paddingTop: 14,
+    },
+    listingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 14,
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    listingText: {
+      flex: 1,
+      minWidth: 0,
+    },
+    listingName: {
+      color: colors.text,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: fontWeight.semibold,
+    },
+    listingAddress: {
+      color: colors.textSecondary,
+      fontSize: typography.caption,
+      lineHeight: 17,
+      marginTop: 2,
+    },
+    pendingChip: {
+      paddingHorizontal: 9,
+      paddingVertical: 4,
+      borderRadius: radius.pill,
+      backgroundColor: colors.champagneSoft,
+    },
+    pendingChipText: {
+      color: colors.goldDeep,
+      fontSize: 11,
+      fontWeight: fontWeight.semibold,
+    },
+    signOutButton: {
+      marginTop: spacing.lg,
+      // Solid surface so the red label keeps AA contrast (ivory alone is 4.3:1).
+      backgroundColor: colors.surface,
+    },
+  })

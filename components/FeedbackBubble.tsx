@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   AppState,
@@ -8,6 +8,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 
 import {
   dismissFeedbackRequest,
@@ -22,14 +23,25 @@ import {
 
 import { supabase } from '../lib/supabase';
 import { useDialog } from '../contexts/DialogContext';
+import { useTheme } from '../contexts/ThemeContext';
+
+import { initialWindowMetrics } from 'react-native-safe-area-context';
 
 import {
-  colors,
+  colors as lightColors,
   fontWeight,
   radius,
+  shadow,
+  size,
   spacing,
   typography,
 } from '../constants/tokens';
+
+// Sit just above the tab bar, which grows by the bottom safe-area inset.
+const BUBBLE_BOTTOM_OFFSET =
+  size.tabBarHeight +
+  Math.max(initialWindowMetrics?.insets.bottom ?? 0, spacing.sm) +
+  12;
 
 type FeedbackItem = {
   sessionId: string;
@@ -43,6 +55,8 @@ type Props = {
 
 export default function FeedbackBubble({ hidden = false }: Props) {
   const { showDialog } = useDialog();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
 
   const [feedback, setFeedback] = useState<FeedbackItem | null>(null);
   const [submittingRating, setSubmittingRating] = useState(false);
@@ -279,6 +293,10 @@ export default function FeedbackBubble({ hidden = false }: Props) {
     >
       <View style={styles.bubble}>
         <View style={styles.header}>
+          <View style={styles.markCircle}>
+            <Ionicons name="star" size={17} color={colors.star} />
+          </View>
+
           <View style={styles.textContainer}>
             <Text style={styles.title}>
               How was your parking?
@@ -296,11 +314,18 @@ export default function FeedbackBubble({ hidden = false }: Props) {
             onPress={handleDismiss}
             disabled={submittingRating}
             hitSlop={10}
-            style={styles.closeButton}
+            style={({ pressed }) => [
+              styles.closeButton,
+              pressed && styles.closeButtonPressed,
+            ]}
             accessibilityRole="button"
             accessibilityLabel="Dismiss feedback"
           >
-            <Text style={styles.closeText}>×</Text>
+            <Ionicons
+              name="close"
+              size={16}
+              color={colors.textSecondary}
+            />
           </Pressable>
         </View>
 
@@ -322,10 +347,14 @@ export default function FeedbackBubble({ hidden = false }: Props) {
                 {submittingRating && activeStar === star ? (
                   <ActivityIndicator
                     size="small"
-                    color="#F5B82E"
+                    color={colors.star}
                   />
                 ) : (
-                  <Text style={styles.star}>★</Text>
+                  <Ionicons
+                    name="star"
+                    size={24}
+                    color={colors.star}
+                  />
                 )}
               </Pressable>
             ))}
@@ -336,87 +365,91 @@ export default function FeedbackBubble({ hidden = false }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 76,
-    zIndex: 1000,
-    elevation: 1000,
-    alignItems: 'center',
-    pointerEvents: 'box-none',
-  },
-  bubble: {
-    width: '100%',
-    marginHorizontal: spacing.lg,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    elevation: 12,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 4,
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    overlay: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: BUBBLE_BOTTOM_OFFSET,
+      paddingHorizontal: spacing.md,
+      zIndex: 1000,
+      elevation: 1000,
+      alignItems: 'center',
+      pointerEvents: 'box-none',
     },
-    shadowOpacity: 0.18,
-    shadowRadius: 8,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  textContainer: {
-    flex: 1,
-    marginRight: spacing.sm,
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  spotName: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: 3,
-  },
-  closeButton: {
-    width: 30,
-    height: 30,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  closeText: {
-    color: colors.textSecondary,
-    fontSize: 25,
-    lineHeight: 27,
-  },
-  ratingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: spacing.md,
-  },
-  ratingHint: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  starButton: {
-    paddingHorizontal: 3,
-    paddingVertical: 2,
-    minWidth: 27,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  star: {
-    color: '#F5B82E',
-    fontSize: 25,
-  },
-});
+    bubble: {
+      width: '100%',
+      maxWidth: 480,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.champagne,
+      borderRadius: radius.xl,
+      paddingHorizontal: 14,
+      paddingVertical: 12,
+      ...shadow.lg,
+    },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    markCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.champagneSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    textContainer: {
+      flex: 1,
+      minWidth: 0,
+    },
+    title: {
+      color: colors.text,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: fontWeight.semibold,
+    },
+    spotName: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 17,
+      marginTop: 1,
+    },
+    closeButton: {
+      width: 32,
+      height: 32,
+      borderRadius: 16,
+      backgroundColor: colors.surfaceMuted,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    closeButtonPressed: {
+      opacity: 0.7,
+    },
+    ratingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      marginTop: 10,
+      paddingTop: 10,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+    },
+    ratingHint: {
+      color: colors.textSecondary,
+      fontSize: typography.caption + 1,
+    },
+    starsContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    starButton: {
+      width: 34,
+      height: 34,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+  });

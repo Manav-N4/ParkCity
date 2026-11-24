@@ -8,7 +8,12 @@ import {
 import { useTheme } from '../../contexts/ThemeContext';
 import { radius, spacing } from '../../constants/tokens';
 
-export default function SkeletonCard() {
+type Props = {
+  // 'row' is the compact list skeleton; 'photo' mirrors ParkingSpotCard.
+  variant?: 'row' | 'photo';
+};
+
+export default function SkeletonCard({ variant = 'row' }: Props) {
   const { colors } = useTheme();
   const shimmer = useRef(new Animated.Value(0)).current;
 
@@ -35,13 +40,53 @@ export default function SkeletonCard() {
 
   const opacity = shimmer.interpolate({
     inputRange: [0, 1],
-    outputRange: [0.35, 0.8],
+    outputRange: [0.45, 0.9],
   });
 
   const placeholderStyle = {
-    backgroundColor: colors.border,
+    backgroundColor: colors.skeleton,
     opacity,
   };
+
+  if (variant === 'photo') {
+    return (
+      <View
+        accessibilityLabel="Loading parking spot"
+        style={[
+          styles.photoCard,
+          {
+            backgroundColor: colors.surface,
+            borderColor: colors.border,
+          },
+        ]}
+      >
+        <Animated.View style={[styles.photoImage, placeholderStyle]} />
+
+        <View style={styles.photoInfo}>
+          <Animated.View
+            style={[styles.photoTitle, placeholderStyle]}
+          />
+          <Animated.View
+            style={[styles.photoSubtitle, placeholderStyle]}
+          />
+
+          <View
+            style={[
+              styles.photoFooter,
+              { borderTopColor: colors.border },
+            ]}
+          >
+            <Animated.View
+              style={[styles.photoPrice, placeholderStyle]}
+            />
+            <Animated.View
+              style={[styles.photoAction, placeholderStyle]}
+            />
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View
@@ -80,6 +125,7 @@ export default function SkeletonCard() {
 }
 
 const styles = StyleSheet.create({
+  // Row variant
   card: {
     flexDirection: 'row',
     overflow: 'hidden',
@@ -123,5 +169,52 @@ const styles = StyleSheet.create({
     height: 30,
     width: 85,
     borderRadius: radius.sm,
+  },
+
+  // Photo variant: matches ParkingSpotCard (285 tall, 136 photo)
+  photoCard: {
+    height: 285,
+    marginBottom: spacing.lg,
+    borderRadius: radius.xxl,
+    borderWidth: StyleSheet.hairlineWidth,
+    overflow: 'hidden',
+  },
+  photoImage: {
+    height: 136,
+  },
+  photoInfo: {
+    flex: 1,
+    paddingHorizontal: spacing.md,
+    paddingTop: 14,
+    paddingBottom: 14,
+    gap: spacing.sm,
+  },
+  photoTitle: {
+    height: 18,
+    width: '70%',
+    borderRadius: radius.sm,
+  },
+  photoSubtitle: {
+    height: 12,
+    width: '50%',
+    borderRadius: radius.sm,
+  },
+  photoFooter: {
+    marginTop: 'auto',
+    paddingTop: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  photoPrice: {
+    height: 18,
+    width: 72,
+    borderRadius: radius.sm,
+  },
+  photoAction: {
+    height: 32,
+    width: 72,
+    borderRadius: radius.pill,
   },
 });

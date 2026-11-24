@@ -1,7 +1,6 @@
 
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -9,6 +8,8 @@ import {
   View,
 } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
 import type { CompositeScreenProps } from '@react-navigation/native';
 import type { BottomTabScreenProps } from '@react-navigation/bottom-tabs';
@@ -26,19 +27,34 @@ import { getSavedSpots, toggleSavedSpot } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import { useDialog } from '../contexts/DialogContext';
-import { spacing, fontWeight } from '../constants/tokens';
+import {
+  colors as lightColors,
+  fontWeight,
+  letterSpacing,
+  radius,
+  spacing,
+  typography,
+} from '../constants/tokens';
 
 import ParkingSpotCard from '../components/ParkingSpotCard';
 import SkeletonCard from '../components/ui/SkeletonCard';
 import EmptyState from '../components/ui/EmptyState';
+import PrimaryButton from '../components/ui/PrimaryButton';
 
 type Props = CompositeScreenProps<
   BottomTabScreenProps<MainTabParamList, 'Saved'>,
   NativeStackScreenProps<RootStackParamList>
 >;
 
+// Must match ParkingSpotCard's fixed height (285) and bottom margin,
+// so the swipe action lines up with the card.
+const REMOVE_ACTION_HEIGHT = 285;
+const REMOVE_SLOT_WIDTH = 100;
+
 export default function SavedScreen({ navigation }: Props) {
   const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
   const { showDialog } = useDialog();
 
   const [savedSpots, setSavedSpots] = useState<SavedSpot[]>([]);
@@ -131,6 +147,7 @@ export default function SavedScreen({ navigation }: Props) {
     id: spot.id,
     google_place_id: spot.google_place_id,
     name: spot.name,
+    address: spot.address,
     lat: spot.lat,
     lng: spot.lng,
     price_per_hour: spot.price_per_hour,
@@ -138,99 +155,111 @@ export default function SavedScreen({ navigation }: Props) {
   });
 
   const renderRightActions = (spot: SavedSpot) => (
-    <Pressable
-      onPress={() => handleRemove(spot)}
-      disabled={removingId !== null}
-      accessibilityRole="button"
-      accessibilityLabel={`Remove ${spot.name} from saved spots`}
-      style={[
-        styles.removeAction,
-        { backgroundColor: colors.error },
-      ]}
-    >
-      <Text style={styles.removeActionText}>
-        {removingId === spot.id ? 'Removing...' : 'Remove'}
-      </Text>
-    </Pressable>
+    <View style={styles.removeSlot}>
+      <Pressable
+        onPress={() => handleRemove(spot)}
+        disabled={removingId !== null}
+        accessibilityRole="button"
+        accessibilityLabel={`Remove ${spot.name} from saved spots`}
+        style={({ pressed }) => [
+          styles.removeAction,
+          { backgroundColor: colors.errorStrong },
+          pressed && styles.removeActionPressed,
+        ]}
+      >
+        <Ionicons
+          name="trash-outline"
+          size={20}
+          color={colors.white}
+        />
+        <Text style={styles.removeActionText}>
+          {removingId === spot.id ? 'Removing...' : 'Remove'}
+        </Text>
+      </Pressable>
+    </View>
   );
 
-  return (
-    <View
-      style={[
-        styles.container,
-        { backgroundColor: colors.background },
-      ]}
-    >
-      <View style={styles.header}>
-        <Text style={[styles.title, { color: colors.text }]}>
-          Saved Spots
-        </Text>
+  const showCount =
+    !loading && isSignedIn && !error && savedSpots.length > 0;
 
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Your favourite parking locations.
-        </Text>
+  return (
+    <View style={styles.container}>
+      <View
+        style={[
+          styles.header,
+          { paddingTop: insets.top + spacing.md },
+        ]}
+      >
+        <View style={styles.headerText}>
+          <Text style={styles.title}>Saved Spots</Text>
+
+          <Text style={styles.subtitle}>
+            Your favourite parking locations.
+          </Text>
+        </View>
+
+        {showCount && (
+          <View style={styles.countChip}>
+            <Text style={styles.countChipText}>
+              {savedSpots.length} saved
+            </Text>
+          </View>
+        )}
       </View>
 
       {loading ? (
         <View style={[styles.list, { paddingTop: 8 }]}>
-          <SkeletonCard />
-          <SkeletonCard />
-          <SkeletonCard />
+          <SkeletonCard variant="photo" />
+          <SkeletonCard variant="photo" />
+          <SkeletonCard variant="photo" />
         </View>
       ) : !isSignedIn ? (
         <View style={styles.centerState}>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            Sign in to save spots
-          </Text>
+          <EmptyState
+            icon="heart-outline"
+            heading="Sign in to save spots"
+            subtext="Sign in to view and manage your saved parking locations."
+          />
 
-          <Text style={[styles.stateText, { color: colors.textSecondary }]}>
-            Sign in to view and manage your saved parking locations.
-          </Text>
-
-          <Pressable
+          <PrimaryButton
+            title="Sign in"
             onPress={() =>
               navigation
                 .getParent<NativeStackNavigationProp<RootStackParamList>>()
                 ?.navigate('EmailLogin', {})
             }
-            style={[
-              styles.signInButton,
-              { backgroundColor: colors.primary },
-            ]}
-          >
-            <Text style={styles.signInButtonText}>
-              Sign in
-            </Text>
-          </Pressable>
+            style={styles.stateButton}
+          />
         </View>
       ) : error ? (
         <View style={styles.centerState}>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>
-            Couldn't load saved spots
-          </Text>
+          <EmptyState
+            icon="alert-circle-outline"
+            heading="Couldn't load saved spots"
+            subtext={error}
+          />
 
-          <Text style={[styles.stateText, { color: colors.textSecondary }]}>
-            {error}
-          </Text>
-
-          <Pressable
+          <PrimaryButton
+            title="Try again"
             onPress={() => void loadSavedSpots()}
-            style={[
-              styles.signInButton,
-              { backgroundColor: colors.primary },
-            ]}
-          >
-            <Text style={styles.signInButtonText}>
-              Try again
-            </Text>
-          </Pressable>
+            style={styles.stateButton}
+          />
         </View>
       ) : savedSpots.length === 0 ? (
-        <EmptyState
-          icon="bookmark-outline"
-          heading="No saved spots yet"
-          subtext="Start exploring and save your favourite parking spots here."
-        />
+        <View style={styles.centerState}>
+          <EmptyState
+            icon="bookmark-outline"
+            heading="No saved spots yet"
+            subtext="Start exploring and save your favourite parking spots here."
+          />
+
+          <PrimaryButton
+            title="Explore parking"
+            variant="outline"
+            onPress={() => navigation.navigate('Home')}
+            style={styles.stateButton}
+          />
+        </View>
       ) : (
         <ScrollView
           contentContainerStyle={styles.list}
@@ -259,77 +288,98 @@ export default function SavedScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
 
-  header: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 60,
-    paddingBottom: spacing.lg,
-  },
+    header: {
+      flexDirection: 'row',
+      alignItems: 'flex-end',
+      justifyContent: 'space-between',
+      gap: spacing.md,
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.lg,
+    },
 
-  title: {
-    fontSize: 28,
-    fontWeight: fontWeight.bold,
-  },
+    headerText: {
+      flex: 1,
+      minWidth: 0,
+    },
 
-  subtitle: {
-    marginTop: spacing.xs,
-    fontSize: 14,
-  },
+    title: {
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+    },
 
-  list: {
-    paddingHorizontal: spacing.lg,
-    paddingBottom: spacing.xl,
-  },
+    subtitle: {
+      marginTop: spacing.xs,
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      lineHeight: typography.smallLineHeight,
+    },
 
-  centerState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: spacing.xl,
-    gap: spacing.md,
-  },
+    countChip: {
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: radius.pill,
+      backgroundColor: colors.champagneSoft,
+      marginBottom: 2,
+    },
 
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: fontWeight.semibold,
-    textAlign: 'center',
-  },
+    countChipText: {
+      color: colors.goldDeep,
+      fontSize: typography.caption,
+      fontWeight: fontWeight.semibold,
+    },
 
-  stateText: {
-    fontSize: 14,
-    textAlign: 'center',
-    lineHeight: 21,
-  },
+    list: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+    },
 
-  signInButton: {
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.md,
-    borderRadius: 12,
-    marginTop: spacing.sm,
-  },
+    centerState: {
+      flex: 1,
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+    },
 
-  signInButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: fontWeight.semibold,
-  },
+    stateButton: {
+      alignSelf: 'center',
+      minWidth: 180,
+      paddingHorizontal: spacing.xl,
+    },
 
-  removeAction: {
-    width: 100,
-    height: 285,
-    marginBottom: spacing.lg,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    // Swipe-to-remove action
+    removeSlot: {
+      width: REMOVE_SLOT_WIDTH,
+      height: REMOVE_ACTION_HEIGHT,
+      marginBottom: spacing.lg,
+      paddingLeft: 12,
+    },
 
-  removeActionText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: fontWeight.bold,
-  },
-});
+    removeAction: {
+      flex: 1,
+      borderRadius: radius.xxl,
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+
+    removeActionPressed: {
+      opacity: 0.85,
+    },
+
+    removeActionText: {
+      color: colors.white,
+      fontSize: 13,
+      fontWeight: fontWeight.semibold,
+    },
+  });

@@ -1,9 +1,7 @@
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +9,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Notifications from 'expo-notifications';
 
@@ -23,9 +23,13 @@ import {
 } from '../lib/feedbackStorage';
 import { supabase } from '../lib/supabase';
 import { useDialog } from '../contexts/DialogContext';
+import { useTheme } from '../contexts/ThemeContext';
+import PrimaryButton from '../components/ui/PrimaryButton';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import {
-  colors,
+  colors as lightColors,
   fontWeight,
+  letterSpacing,
   radius,
   spacing,
   typography,
@@ -42,6 +46,13 @@ export default function SatisfactionScreen({
 }: Props) {
   const { spotId, sessionId } = route.params;
   const { showDialog } = useDialog();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardAwareScroll();
+
+  // Display-only focus state for the comment input border.
+  const [isCommentFocused, setIsCommentFocused] = useState(false);
 
   // Identifies whether this screen was opened through a reminder notification.
   const isReminder =
@@ -257,12 +268,21 @@ export default function SatisfactionScreen({
   };
 
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        ref={keyboard.scrollRef}
+        onScroll={keyboard.handleScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + spacing.sm,
+            paddingBottom:
+              Math.max(insets.bottom, spacing.md) +
+              spacing.md +
+              keyboard.keyboardHeight,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
@@ -273,13 +293,18 @@ export default function SatisfactionScreen({
             onPress={handleSkip}
             style={styles.skipButton}
             disabled={isSubmitting}
+            accessibilityRole="button"
+            accessibilityLabel="Skip"
+            hitSlop={8}
           >
             <Text style={styles.skipText}>Skip</Text>
           </Pressable>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.illustration}>★</Text>
+        <View style={styles.body}>
+          <View style={styles.mark}>
+            <Ionicons name="star" size={32} color={colors.star} />
+          </View>
 
           <Text style={styles.title}>
             How was your parking?
@@ -293,7 +318,16 @@ export default function SatisfactionScreen({
             {isLoadingSpot ? (
               <ActivityIndicator color={colors.primary} />
             ) : (
-              <Text style={styles.spotName}>{spotName}</Text>
+              <View style={styles.spotChip}>
+                <Ionicons
+                  name="location-outline"
+                  size={14}
+                  color={colors.textSecondary}
+                />
+                <Text style={styles.spotName} numberOfLines={1}>
+                  {spotName}
+                </Text>
+              </View>
             )}
           </View>
 
@@ -314,14 +348,15 @@ export default function SatisfactionScreen({
                   selected: selectedRating === star,
                 }}
               >
-                <Text
-                  style={[
-                    styles.star,
-                    star <= selectedRating && styles.selectedStar,
-                  ]}
-                >
-                  ★
-                </Text>
+                <Ionicons
+                  name={star <= selectedRating ? 'star' : 'star-outline'}
+                  size={38}
+                  color={
+                    star <= selectedRating
+                      ? colors.star
+                      : colors.textSecondary
+                  }
+                />
               </Pressable>
             ))}
           </View>
@@ -340,199 +375,205 @@ export default function SatisfactionScreen({
                       : 'Excellent'}
           </Text>
 
-          <Text style={styles.commentLabel}>
-            Anything you'd like to add? (Optional)
-          </Text>
+          <View style={styles.commentLabelRow}>
+            <Text style={styles.commentLabel}>
+              Anything you'd like to add?
+            </Text>
+            <Text style={styles.optionalLabel}>(Optional)</Text>
+          </View>
 
           <TextInput
-            style={styles.commentInput}
+            style={[
+              styles.commentInput,
+              isCommentFocused && styles.commentInputFocused,
+            ]}
             placeholder="Share your experience..."
             placeholderTextColor={colors.textSecondary}
             value={comment}
             onChangeText={setComment}
+            onFocus={() => {
+              setIsCommentFocused(true);
+              keyboard.revealOnFocus();
+            }}
+            onBlur={() => setIsCommentFocused(false)}
+            // Keep the growing comment box above the keyboard as lines are added.
+            onContentSizeChange={keyboard.revealOnFocus}
             multiline
             numberOfLines={4}
             textAlignVertical="top"
             editable={!isSubmitting}
             maxLength={500}
+            accessibilityLabel="Comment, optional"
           />
 
           <Text style={styles.characterCount}>
             {comment.length}/500
           </Text>
 
-          <Pressable
-            style={[
-              styles.submitButton,
-              (isSubmitting || selectedRating === 0) &&
-                styles.disabledButton,
-            ]}
+          <PrimaryButton
+            title="Submit Rating"
             onPress={handleSubmit}
+            loading={isSubmitting}
             disabled={isSubmitting || selectedRating === 0}
-            accessibilityRole="button"
-          >
-            {isSubmitting ? (
-              <ActivityIndicator color={colors.background} />
-            ) : (
-              <Text style={styles.submitButtonText}>
-                Submit Rating
-              </Text>
-            )}
-          </Pressable>
+            style={styles.submitButton}
+          />
         </View>
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  content: {
-    flexGrow: 1,
-    justifyContent: 'center',
-    padding: spacing.lg,
-    paddingTop: spacing.xl * 2,
-    paddingBottom: spacing.xl * 2,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: spacing.lg,
-  },
-  eyebrow: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 2,
-  },
-  skipButton: {
-    padding: spacing.sm,
-  },
-  skipText: {
-    color: colors.textSecondary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.medium,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-    alignItems: 'center',
-  },
-  illustration: {
-    fontSize: 48,
-    color: colors.primary,
-    marginBottom: spacing.md,
-  },
-  title: {
-    color: colors.text,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-    textAlign: 'center',
-  },
-  subtitle: {
-    color: colors.textSecondary,
-    fontSize: typography.body,
-    textAlign: 'center',
-    marginTop: spacing.sm,
-    lineHeight: 22,
-  },
-  spotContainer: {
-    minHeight: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: spacing.lg,
-  },
-  spotName: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-    textAlign: 'center',
-  },
-  ratingLabel: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-    marginTop: spacing.xl,
-  },
-  starsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: spacing.md,
-  },
-  starButton: {
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs,
-  },
-  star: {
-    fontSize: 38,
-    color: colors.border,
-  },
-  selectedStar: {
-    color: '#F5B82E',
-  },
-  ratingDescription: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.sm,
-    minHeight: 20,
-  },
-  commentLabel: {
-    alignSelf: 'flex-start',
-    color: colors.text,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-    marginTop: spacing.xl,
-    marginBottom: spacing.sm,
-  },
-  commentInput: {
-    width: '100%',
-    minHeight: 110,
-    borderWidth: 1,
-    borderColor: colors.border,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    color: colors.text,
-    fontSize: typography.body,
-    backgroundColor: colors.background,
-  },
-  characterCount: {
-    alignSelf: 'flex-end',
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.xs,
-  },
-  submitButton: {
-    width: '100%',
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.lg,
-    minHeight: 50,
-    justifyContent: 'center',
-  },
-  disabledButton: {
-    opacity: 0.5,
-  },
-  submitButtonText: {
-    color: colors.background,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  secondarySkipButton: {
-    padding: spacing.md,
-    marginTop: spacing.xs,
-  },
-  secondarySkipText: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: fontWeight.medium,
-  },
-});
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      flexGrow: 1,
+      paddingHorizontal: spacing.lg,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: spacing.md,
+    },
+    eyebrow: {
+      color: colors.goldDeep,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.overline,
+    },
+    skipButton: {
+      paddingVertical: spacing.sm,
+      paddingLeft: spacing.md,
+    },
+    skipText: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      fontWeight: fontWeight.semibold,
+    },
+    body: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    mark: {
+      width: 72,
+      height: 72,
+      borderRadius: 36,
+      backgroundColor: colors.champagneSoft,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.champagne,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+    },
+    title: {
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+      textAlign: 'center',
+    },
+    subtitle: {
+      color: colors.textSecondary,
+      fontSize: typography.small + 1,
+      lineHeight: 22,
+      textAlign: 'center',
+      marginTop: spacing.sm,
+      maxWidth: 320,
+    },
+    spotContainer: {
+      minHeight: 40,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: spacing.md,
+    },
+    spotChip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+      maxWidth: 300,
+      paddingHorizontal: 12,
+      paddingVertical: 6,
+      borderRadius: radius.pill,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+    },
+    spotName: {
+      flexShrink: 1,
+      color: colors.text,
+      fontSize: typography.small,
+      fontWeight: fontWeight.semibold,
+    },
+    ratingLabel: {
+      color: colors.text,
+      fontSize: typography.body,
+      fontWeight: fontWeight.semibold,
+      marginTop: spacing.lg,
+    },
+    starsContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginTop: spacing.sm,
+    },
+    starButton: {
+      width: 48,
+      height: 48,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    ratingDescription: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      marginTop: spacing.xs,
+      minHeight: 20,
+    },
+    commentLabelRow: {
+      alignSelf: 'stretch',
+      flexDirection: 'row',
+      alignItems: 'baseline',
+      gap: 6,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+    },
+    commentLabel: {
+      color: colors.text,
+      fontSize: typography.small,
+      fontWeight: fontWeight.semibold,
+    },
+    optionalLabel: {
+      color: colors.textSecondary,
+      fontSize: typography.caption,
+    },
+    commentInput: {
+      alignSelf: 'stretch',
+      minHeight: 104,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      borderRadius: radius.lg,
+      padding: spacing.md,
+      color: colors.text,
+      fontSize: typography.body - 1,
+      lineHeight: 21,
+      backgroundColor: colors.surface,
+    },
+    commentInputFocused: {
+      borderColor: colors.primary,
+    },
+    characterCount: {
+      alignSelf: 'flex-end',
+      color: colors.textSecondary,
+      fontSize: typography.caption,
+      marginTop: spacing.xs,
+    },
+    submitButton: {
+      alignSelf: 'stretch',
+      marginTop: spacing.md,
+    },
+  });

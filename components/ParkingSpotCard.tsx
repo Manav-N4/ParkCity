@@ -1,26 +1,32 @@
 
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   Animated,
-  ImageBackground,
   Pressable,
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Image } from 'expo-image';
 import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from '@react-navigation/native';
 
 import VerificationBadge from './VerificationBadge';
 import {
-  colors,
+  colors as lightColors,
   fontWeight,
+  letterSpacing,
+  radius,
+  shadow,
   spacing,
 } from '../constants/tokens';
+import { PARKING_PLACEHOLDER_URI } from '../constants/images';
 import type { ParkingSpot } from '../types/parking';
 import { getSavedSpots, toggleSavedSpot } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useDialog } from '../contexts/DialogContext';
+import { useTheme } from '../contexts/ThemeContext';
 
 type ParkingSpotCardProps = {
   spot: ParkingSpot;
@@ -34,8 +40,9 @@ type ParkingSpotCardProps = {
   onSavedChange?: (isSaved: boolean) => void;
 };
 
-const PARKING_PLACEHOLDER =
-  'https://images.unsplash.com/photo-1590674899484-d5640e854abe?auto=format&fit=crop&w=1200&q=85';
+// SavedScreen's swipe-to-remove action is sized to this card height.
+const CARD_HEIGHT = 285;
+const PHOTO_HEIGHT = 136;
 
 export default function ParkingSpotCard({
   spot,
@@ -44,6 +51,8 @@ export default function ParkingSpotCard({
   onSavedChange,
 }: ParkingSpotCardProps) {
   const { showDialog } = useDialog();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
   const [isSaved, setIsSaved] = useState(isInitiallySaved ?? false);
   const [isSaving, setIsSaving] = useState(false);
   const heartScale = useRef(new Animated.Value(1)).current;
@@ -195,6 +204,11 @@ export default function ParkingSpotCard({
     spot.verification_tier ??
     (spot.source === 'google_raw' ? 'google_raw' : 'unverified');
 
+  const addressText =
+    typeof spot.address === 'string' && spot.address.trim().length > 0
+      ? spot.address
+      : 'Parking location';
+
   return (
     <Pressable
       onPress={handlePress}
@@ -205,25 +219,28 @@ export default function ParkingSpotCard({
         pressed && styles.cardPressed,
       ]}
     >
-      <ImageBackground
-        source={{ uri: PARKING_PLACEHOLDER }}
-        style={styles.image}
-        imageStyle={styles.imageStyle}
-        resizeMode="cover"
-      >
+      <View style={styles.photo}>
+        <Image
+          source={{ uri: PARKING_PLACEHOLDER_URI }}
+          style={StyleSheet.absoluteFill}
+          contentFit="cover"
+          transition={200}
+          cachePolicy="memory-disk"
+          accessible={false}
+        />
+
+        {/* Soft warm wash so the photo supports, rather than leads, the card */}
+        <View style={styles.photoTint} pointerEvents="none" />
+
         <LinearGradient
-          colors={[
-            'rgba(10, 18, 14, 0.02)',
-            'rgba(10, 18, 14, 0.18)',
-            'rgba(10, 18, 14, 0.94)',
-          ]}
-          locations={[0.15, 0.5, 1]}
+          colors={['rgba(31,27,20,0.22)', 'rgba(31,27,20,0)']}
+          locations={[0, 0.55]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
         />
 
         <View style={styles.badgePosition}>
-          <VerificationBadge tier={verificationTier} />
+          <VerificationBadge tier={verificationTier} variant="onImage" />
         </View>
 
         <Pressable
@@ -255,180 +272,184 @@ export default function ParkingSpotCard({
               transform: [{ scale: heartScale }],
             }}
           >
-            <Text
-              style={[
-                styles.favoriteIcon,
-                isSaved && styles.favoriteIconActive,
-              ]}
-            >
-              {isSaved ? '♥' : '♡'}
-            </Text>
+            <Ionicons
+              name={isSaved ? 'heart' : 'heart-outline'}
+              size={20}
+              color={isSaved ? colors.error : colors.textSecondary}
+            />
           </Animated.View>
         </Pressable>
+      </View>
 
-        <View style={styles.content}>
-          <Text numberOfLines={2} style={styles.name}>
-            {spot.name}
-          </Text>
+      <View style={styles.info}>
+        <Text numberOfLines={2} style={styles.name}>
+          {spot.name}
+        </Text>
 
-          <Text style={styles.location}>Parking location</Text>
+        <Text numberOfLines={1} style={styles.address}>
+          {addressText}
+        </Text>
 
-          <View style={styles.separator} />
-
-          <View style={styles.bottomRow}>
-            <View style={styles.priceContainer}>
-              <Text style={styles.priceLabel}>PARKING RATE</Text>
+        <View style={styles.footer}>
+          <View style={styles.priceContainer}>
+            {spot.price_per_hour == null ? (
+              <Text style={styles.priceUnavailable} numberOfLines={1}>
+                Price unavailable
+              </Text>
+            ) : (
               <Text style={styles.price} numberOfLines={1}>
-                {spot.price_per_hour == null
-                  ? 'Price unavailable'
-                  : `₹${spot.price_per_hour}/hr`}
+                ₹{spot.price_per_hour}
+                <Text style={styles.priceUnit}> /hr</Text>
               </Text>
-            </View>
-
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={`View parking details for ${spot.name}`}
-              onPress={handlePress}
-              style={({ pressed }) => [
-                styles.directionsButton,
-                pressed && styles.buttonPressed,
-              ]}
-            >
-              <Text style={styles.directionsText}>
-                View parking ↗
-              </Text>
-            </Pressable>
+            )}
           </View>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`View parking details for ${spot.name}`}
+            onPress={handlePress}
+            hitSlop={6}
+            style={({ pressed }) => [
+              styles.viewButton,
+              pressed && styles.buttonPressed,
+            ]}
+          >
+            <Text style={styles.viewButtonText}>View</Text>
+            <Ionicons
+              name="arrow-forward"
+              size={14}
+              color={colors.primaryDeep}
+            />
+          </Pressable>
         </View>
-      </ImageBackground>
+      </View>
     </Pressable>
   );
 }
 
-const styles = StyleSheet.create({
-  card: {
-    width: '100%',
-    height: 285,
-    marginBottom: spacing.lg,
-    borderRadius: 28,
-    borderWidth: 4,
-    borderColor: colors.white,
-    backgroundColor: colors.surface,
-    overflow: 'hidden',
-    shadowColor: colors.text,
-    shadowOffset: { width: 0, height: 7 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 5,
-  },
-  cardPressed: {
-    transform: [{ scale: 0.985 }],
-  },
-  image: {
-    flex: 1,
-    justifyContent: 'flex-end',
-    backgroundColor: colors.textSecondary,
-  },
-  imageStyle: {
-    borderRadius: 23,
-  },
-  badgePosition: {
-    position: 'absolute',
-    top: 12,
-    left: 12,
-    zIndex: 3,
-    elevation: 3,
-    maxWidth: '72%',
-  },
-  favoriteButton: {
-    position: 'absolute',
-    top: 12,
-    right: 12,
-    zIndex: 3,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  favoriteButtonActive: {
-    backgroundColor: colors.favoriteBackground,
-    borderColor: colors.favoriteBorder,
-  },
-  favoriteButtonPressed: {
-    opacity: 0.82,
-  },
-  favoriteButtonDisabled: {
-    opacity: 0.6,
-  },
-  favoriteIcon: {
-    fontSize: 27,
-    lineHeight: 32,
-    color: colors.textSecondary,
-  },
-  favoriteIconActive: {
-    color: colors.error,
-  },
-  content: {
-    paddingHorizontal: 18,
-    paddingTop: 12,
-    paddingBottom: 15,
-  },
-  name: {
-    color: colors.white,
-    fontSize: 23,
-    lineHeight: 28,
-    fontWeight: fontWeight.bold,
-    letterSpacing: -0.4,
-  },
-  location: {
-    marginTop: 3,
-    color: colors.overlayText,
-    fontSize: 13,
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.overlaySurfaceBorder,
-    marginVertical: 11,
-  },
-  bottomRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  priceContainer: {
-    flex: 1,
-    gap: 4,
-    minWidth: 0,
-  },
-  priceLabel: {
-    color: colors.overlayText,
-    fontSize: 9,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 1.1,
-  },
-  price: {
-    color: colors.white,
-    fontSize: 14,
-    fontWeight: fontWeight.semibold,
-  },
-  directionsButton: {
-    backgroundColor: colors.surface,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    flexShrink: 0,
-  },
-  directionsText: {
-    color: colors.text,
-    fontSize: 12,
-    fontWeight: fontWeight.bold,
-  },
-  buttonPressed: {
-    opacity: 0.78,
-  },
-});
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    card: {
+      width: '100%',
+      height: CARD_HEIGHT,
+      marginBottom: spacing.lg,
+      borderRadius: radius.xxl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      ...shadow.md,
+    },
+    cardPressed: {
+      transform: [{ scale: 0.985 }],
+    },
+    photo: {
+      height: PHOTO_HEIGHT,
+      borderTopLeftRadius: radius.xxl,
+      borderTopRightRadius: radius.xxl,
+      overflow: 'hidden',
+      backgroundColor: colors.skeleton,
+    },
+    photoTint: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(232,200,121,0.10)',
+    },
+    badgePosition: {
+      position: 'absolute',
+      top: 12,
+      left: 12,
+      zIndex: 3,
+      elevation: 3,
+      maxWidth: '72%',
+    },
+    favoriteButton: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      zIndex: 3,
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      backgroundColor: colors.surface,
+      ...shadow.sm,
+    },
+    favoriteButtonActive: {
+      backgroundColor: colors.favoriteBackground,
+      borderWidth: 1,
+      borderColor: colors.favoriteBorder,
+    },
+    favoriteButtonPressed: {
+      opacity: 0.82,
+    },
+    favoriteButtonDisabled: {
+      opacity: 0.6,
+    },
+    info: {
+      flex: 1,
+      paddingHorizontal: spacing.md,
+      paddingTop: 14,
+      paddingBottom: 14,
+    },
+    name: {
+      color: colors.text,
+      fontSize: 18,
+      lineHeight: 23,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.snug,
+    },
+    address: {
+      marginTop: 3,
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 18,
+    },
+    footer: {
+      marginTop: 'auto',
+      paddingTop: 12,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+    },
+    priceContainer: {
+      flex: 1,
+      minWidth: 0,
+    },
+    price: {
+      color: colors.primaryDeep,
+      fontSize: 16,
+      lineHeight: 22,
+      fontWeight: fontWeight.bold,
+    },
+    priceUnit: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      fontWeight: fontWeight.regular,
+    },
+    priceUnavailable: {
+      color: colors.textSecondary,
+      fontSize: 14,
+      lineHeight: 20,
+    },
+    viewButton: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 4,
+      backgroundColor: colors.primarySoft,
+      borderRadius: radius.pill,
+      paddingHorizontal: 14,
+      paddingVertical: 7,
+      flexShrink: 0,
+    },
+    viewButtonText: {
+      color: colors.primaryDeep,
+      fontSize: 13,
+      fontWeight: fontWeight.semibold,
+    },
+    buttonPressed: {
+      opacity: 0.78,
+    },
+  });

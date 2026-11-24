@@ -1,13 +1,15 @@
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../App';
@@ -15,7 +17,17 @@ import { checkOutFromSpot } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useTheme } from '../contexts/ThemeContext';
 import { useDialog } from '../contexts/DialogContext';
-import { spacing, fontWeight } from '../constants/tokens';
+import {
+  colors as lightColors,
+  fontWeight,
+  letterSpacing,
+  radius,
+  shadow,
+  spacing,
+  typography,
+} from '../constants/tokens';
+import ElapsedRing from '../components/ui/ElapsedRing';
+import PrimaryButton from '../components/ui/PrimaryButton';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -43,9 +55,15 @@ export default function ActiveParkingScreen({
 }: Props) {
   const { session } = route.params;
   const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { showDialog } = useDialog();
 
   const [checkingOut, setCheckingOut] = useState(false);
+  const [actionBarHeight, setActionBarHeight] = useState(80);
+
+  const ringSize = width < 360 ? 176 : 200;
 
   const handleCheckout = () => {
     showDialog({
@@ -101,13 +119,17 @@ export default function ActiveParkingScreen({
           {
             label: 'Done',
             onPress: () => {
-              navigation.navigate('Satisfaction', {
+              // Replace so the ended session's screen is removed from the
+              // stack; leaving Satisfaction then returns to where the user
+              // started instead of this screen.
+              navigation.replace('Satisfaction', {
                 spotId: session.spot_id,
                 sessionId: session.id,
               });
             },
           },
         ],
+        dismissible: false,
       });
     } catch (error) {
       showDialog({
@@ -123,257 +145,290 @@ export default function ActiveParkingScreen({
     }
   };
 
+  const hasValidCheckIn = !Number.isNaN(
+    new Date(session.checked_in_at).getTime(),
+  );
+
   return (
-    <ScrollView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      contentContainerStyle={styles.container}
-      showsVerticalScrollIndicator={false}
-    >
-      <Pressable
-        onPress={() => navigation.goBack()}
-        style={styles.backButton}
-      >
-        <Text style={[styles.backText, { color: colors.primary }]}>
-          ← Back to Home
-        </Text>
-      </Pressable>
-
-      <View style={styles.header}>
-        <Text style={[styles.eyebrow, { color: colors.primary }]}>
-          YOUR PARKING
-        </Text>
-
-        <Text style={[styles.title, { color: colors.text }]}>
-          Active Session
-        </Text>
-
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-          Your parking session is currently active.
-        </Text>
-      </View>
-
-      <View
-        style={[
-          styles.statusCard,
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.container,
           {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
+            paddingTop: insets.top + spacing.sm,
+            paddingBottom: actionBarHeight + spacing.lg,
           },
         ]}
+        showsVerticalScrollIndicator={false}
       >
-        <View style={styles.statusRow}>
-          <View style={styles.statusIndicator} />
-          <Text style={styles.statusText}>CURRENTLY PARKED</Text>
+        <Pressable
+          onPress={() => navigation.goBack()}
+          style={({ pressed }) => [
+            styles.backButton,
+            pressed && styles.backButtonPressed,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Back to Home"
+          hitSlop={6}
+        >
+          <Ionicons name="arrow-back" size={20} color={colors.text} />
+        </Pressable>
+
+        <View style={styles.header}>
+          <Text style={styles.eyebrow}>YOUR PARKING</Text>
+
+          <Text style={styles.title}>Active Session</Text>
+
+          <Text style={styles.subtitle}>
+            Your parking session is currently active.
+          </Text>
         </View>
 
-        <Text style={[styles.spotName, { color: colors.text }]}>
-          {session.parking_spots?.name ?? 'Parking location'}
-        </Text>
+        {/* Location */}
+        <View style={styles.locationCard}>
+          <View style={styles.locationIcon}>
+            <Ionicons name="car" size={20} color={colors.primary} />
+          </View>
 
-        <Text style={[styles.address, { color: colors.textSecondary }]}>
-          {session.parking_spots?.address ?? 'Address unavailable'}
-        </Text>
-      </View>
+          <View style={styles.locationText}>
+            <View style={styles.statusChip}>
+              <View style={styles.statusDot} />
+              <Text style={styles.statusText}>Currently parked</Text>
+            </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>
-        Session details
-      </Text>
+            <Text style={styles.spotName}>
+              {session.parking_spots?.name ?? 'Parking location'}
+            </Text>
 
+            <Text style={styles.address}>
+              {session.parking_spots?.address ?? 'Address unavailable'}
+            </Text>
+          </View>
+        </View>
+
+        {/* Duration */}
+        <View style={styles.durationCard}>
+          <ElapsedRing
+            startedAt={session.checked_in_at}
+            size={ringSize}
+          />
+
+          {hasValidCheckIn && (
+            <View style={styles.startedBlock}>
+              <Text style={styles.startedLabel}>Session started</Text>
+              <Text style={styles.startedValue}>
+                {formatTime(session.checked_in_at)} ·{' '}
+                {formatDate(session.checked_in_at)}
+              </Text>
+            </View>
+          )}
+        </View>
+
+        <View style={styles.notice}>
+          <Ionicons
+            name="information-circle-outline"
+            size={18}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.noticeText}>
+            Remember to check out when you leave. Your parking duration and
+            estimated cost will be calculated after checkout.
+          </Text>
+        </View>
+      </ScrollView>
+
+      {/* Sticky checkout */}
       <View
         style={[
-          styles.detailsCard,
-          {
-            backgroundColor: colors.surface,
-            borderColor: colors.border,
-          },
+          styles.actionBar,
+          { paddingBottom: Math.max(insets.bottom, 12) },
         ]}
+        onLayout={(event) =>
+          setActionBarHeight(event.nativeEvent.layout.height)
+        }
       >
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-            Date
-          </Text>
-          <Text style={[styles.detailValue, { color: colors.text }]}>
-            {formatDate(session.checked_in_at)}
-          </Text>
-        </View>
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-            Check-in time
-          </Text>
-          <Text style={[styles.detailValue, { color: colors.text }]}>
-            {formatTime(session.checked_in_at)}
-          </Text>
-        </View>
-
-        <View style={[styles.divider, { backgroundColor: colors.border }]} />
-
-        <View style={styles.detailRow}>
-          <Text style={[styles.detailLabel, { color: colors.textSecondary }]}>
-            Status
-          </Text>
-          <Text style={styles.activeValue}>Active</Text>
-        </View>
+        <PrimaryButton
+          title="I've left this parking spot"
+          variant="destructive"
+          onPress={handleCheckout}
+          loading={checkingOut}
+          disabled={checkingOut}
+        />
       </View>
-
-      <View
-        style={[
-          styles.notice,
-          { backgroundColor: colors.primary + '12' },
-        ]}
-      >
-        <Text style={[styles.noticeText, { color: colors.text }]}>
-          Remember to check out when you leave. Your parking duration and
-          estimated cost will be calculated after checkout.
-        </Text>
-      </View>
-
-      <Pressable
-        onPress={handleCheckout}
-        disabled={checkingOut}
-        style={({ pressed }) => [
-          styles.checkoutButton,
-          { backgroundColor: colors.error },
-          pressed && !checkingOut && styles.buttonPressed,
-          checkingOut && styles.buttonDisabled,
-        ]}
-      >
-        {checkingOut ? (
-          <ActivityIndicator color="#FFFFFF" />
-        ) : (
-          <Text style={styles.checkoutText}>
-            I've left this parking spot
-          </Text>
-        )}
-      </Pressable>
-    </ScrollView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 60,
-    paddingBottom: spacing.xl,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    marginBottom: spacing.xl,
-  },
-  backText: {
-    fontSize: 14,
-    fontWeight: fontWeight.semibold,
-  },
-  header: {
-    marginBottom: spacing.xl,
-  },
-  eyebrow: {
-    fontSize: 11,
-    letterSpacing: 1.5,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing.sm,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: fontWeight.bold,
-  },
-  subtitle: {
-    fontSize: 14,
-    marginTop: spacing.xs,
-  },
-  statusCard: {
-    padding: spacing.lg,
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: spacing.xl,
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: spacing.lg,
-  },
-  statusIndicator: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#27965C',
-  },
-  statusText: {
-    color: '#27965C',
-    fontSize: 11,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 1,
-  },
-  spotName: {
-    fontSize: 21,
-    fontWeight: fontWeight.bold,
-    marginBottom: spacing.xs,
-  },
-  address: {
-    fontSize: 14,
-    lineHeight: 21,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: fontWeight.bold,
-    marginBottom: spacing.md,
-  },
-  detailsCard: {
-    borderRadius: 18,
-    borderWidth: 1,
-    paddingHorizontal: spacing.lg,
-    marginBottom: spacing.lg,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingVertical: spacing.md,
-    gap: spacing.md,
-  },
-  detailLabel: {
-    fontSize: 13,
-  },
-  detailValue: {
-    fontSize: 14,
-    fontWeight: fontWeight.semibold,
-  },
-  activeValue: {
-    color: '#27965C',
-    fontSize: 14,
-    fontWeight: fontWeight.semibold,
-  },
-  divider: {
-    height: 1,
-  },
-  notice: {
-    padding: spacing.md,
-    borderRadius: 13,
-    marginBottom: spacing.xl,
-  },
-  noticeText: {
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  checkoutButton: {
-    padding: spacing.lg,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    minHeight: 54,
-  },
-  checkoutText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: fontWeight.semibold,
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  buttonDisabled: {
-    opacity: 0.65,
-  },
-});
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scroll: {
+      flex: 1,
+    },
+    container: {
+      paddingHorizontal: spacing.lg,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+      ...shadow.sm,
+    },
+    backButtonPressed: {
+      opacity: 0.75,
+    },
+    header: {
+      marginBottom: spacing.lg,
+    },
+    eyebrow: {
+      color: colors.goldDeep,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.overline,
+      marginBottom: spacing.xs,
+    },
+    title: {
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+    },
+    subtitle: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      lineHeight: typography.smallLineHeight,
+      marginTop: spacing.xs,
+    },
+
+    // Location card
+    locationCard: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+      padding: spacing.md,
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      ...shadow.sm,
+    },
+    locationIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    locationText: {
+      flex: 1,
+      minWidth: 0,
+    },
+    statusChip: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 9,
+      paddingVertical: 3,
+      borderRadius: radius.pill,
+      backgroundColor: colors.primarySoft,
+      marginBottom: spacing.sm,
+    },
+    statusDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: colors.primary,
+    },
+    statusText: {
+      color: colors.primaryDeep,
+      fontSize: typography.caption,
+      fontWeight: fontWeight.semibold,
+    },
+    spotName: {
+      color: colors.text,
+      fontSize: 19,
+      lineHeight: 24,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.snug,
+    },
+    address: {
+      color: colors.textSecondary,
+      fontSize: 13.5,
+      lineHeight: 20,
+      marginTop: 3,
+    },
+
+    // Duration card
+    durationCard: {
+      marginTop: spacing.md,
+      paddingVertical: spacing.lg,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+    },
+    startedBlock: {
+      alignItems: 'center',
+      marginTop: spacing.md,
+      gap: 2,
+    },
+    startedLabel: {
+      color: colors.textSecondary,
+      fontSize: typography.caption,
+      lineHeight: typography.captionLineHeight,
+    },
+    startedValue: {
+      color: colors.text,
+      fontSize: typography.small,
+      lineHeight: typography.smallLineHeight,
+      fontWeight: fontWeight.semibold,
+    },
+
+    // Notice
+    notice: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      marginTop: spacing.md,
+      padding: 12,
+      borderRadius: radius.lg,
+      backgroundColor: colors.surfaceMuted,
+    },
+    noticeText: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 12.5,
+      lineHeight: 18,
+    },
+
+    // Sticky action bar
+    actionBar: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: spacing.md,
+      paddingTop: 12,
+      backgroundColor: colors.surface,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      ...shadow.md,
+      shadowOffset: { width: 0, height: -2 },
+    },
+  });

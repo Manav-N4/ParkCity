@@ -9,6 +9,7 @@ import {
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as WebBrowser from 'expo-web-browser';
 import * as Linking from 'expo-linking';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useDialog } from '../contexts/DialogContext';
@@ -19,6 +20,8 @@ import type { RootStackParamList } from '../App';
 WebBrowser.maybeCompleteAuthSession();
 
 type Props = NativeStackScreenProps<RootStackParamList, 'EmailLogin'>;
+
+const PENDING_DESTINATION_KEY = 'pending_post_login_destination';
 
 export default function EmailLoginScreen({ navigation, route }: Props) {
   const { colors } = useTheme();
@@ -87,10 +90,24 @@ export default function EmailLoginScreen({ navigation, route }: Props) {
         return;
       }
 
+      // Preserve the destination before authentication changes the navigator.
+      const nextDestination = route.params?.next;
+
+      if (nextDestination) {
+        await AsyncStorage.setItem(
+          PENDING_DESTINATION_KEY,
+          JSON.stringify(nextDestination),
+        );
+      } else {
+        await AsyncStorage.removeItem(PENDING_DESTINATION_KEY);
+      }
+
       const { error: sessionError } =
         await supabase.auth.exchangeCodeForSession(code);
 
       if (sessionError) {
+        await AsyncStorage.removeItem(PENDING_DESTINATION_KEY);
+
         showDialog({
           type: 'error',
           title: 'Sign-in failed',
@@ -99,37 +116,16 @@ export default function EmailLoginScreen({ navigation, route }: Props) {
         return;
       }
 
-      const next = route.params?.next;
-
-      if (next?.screen === 'ClaimSpot') {
-        navigation.reset({
-          index: 1,
-          routes: [
-            { name: 'MainTabs' },
-            {
-              name: 'ClaimSpot',
-              params: { spot: next.spot },
-            },
-          ],
-        });
-      } else if (next?.screen === 'ParkingDetails') {
-        navigation.reset({
-          index: 1,
-          routes: [
-            { name: 'MainTabs' },
-            {
-              name: 'ParkingDetails',
-              params: { spot: next.spot },
-            },
-          ],
-        });
-      } else {
-        navigation.reset({
-          index: 0,
-          routes: [{ name: 'MainTabs' }],
-        });
-      }
+      // AuthContext detects the successful login.
+      // App.tsx restores the saved destination after authentication and consent.
+      console.log('Google authentication successful.');
     } catch (error) {
+      await AsyncStorage.removeItem(PENDING_DESTINATION_KEY).catch(
+        (storageError) => {
+          console.error('Could not clear pending destination:', storageError);
+        },
+      );
+
       showDialog({
         type: 'error',
         title: 'Something went wrong',

@@ -1,9 +1,6 @@
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,6 +8,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../App';
@@ -18,7 +17,17 @@ import { setParkingReminder } from '../lib/api';
 import { scheduleParkingReminder } from '../lib/notifications';
 import { useTheme } from '../contexts/ThemeContext';
 import { useDialog } from '../contexts/DialogContext';
-import { spacing, fontWeight } from '../constants/tokens';
+import {
+  colors as lightColors,
+  fontWeight,
+  letterSpacing,
+  radius,
+  spacing,
+  typography,
+} from '../constants/tokens';
+import OptionCard from '../components/ui/OptionCard';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
+import PrimaryButton from '../components/ui/PrimaryButton';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -33,6 +42,9 @@ export default function SetReminderScreen({
 }: Props) {
   const { sessionId, spotName, accessToken } = route.params;
   const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardAwareScroll();
   const { showDialog } = useDialog();
 
   const [selectedOption, setSelectedOption] =
@@ -105,328 +117,272 @@ export default function SetReminderScreen({
   };
 
   return (
-    <KeyboardAvoidingView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={styles.screen}>
       <ScrollView
-        contentContainerStyle={styles.container}
+        ref={keyboard.scrollRef}
+        onScroll={keyboard.handleScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.container,
+          {
+            paddingTop: insets.top + spacing.sm,
+            paddingBottom: spacing.xl + keyboard.keyboardHeight,
+          },
+        ]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         <Pressable
           onPress={handleSkip}
           style={styles.skipButton}
+          accessibilityRole="button"
+          accessibilityLabel="Skip for now"
+          hitSlop={8}
         >
-          <Text style={[styles.skipText, { color: colors.textSecondary }]}>
-            Skip for now
-          </Text>
+          <Text style={styles.skipText}>Skip for now</Text>
         </Pressable>
 
         <View style={styles.header}>
-          <Text style={[styles.eyebrow, { color: colors.primary }]}>
-            PARKING REMINDER
-          </Text>
+          <Text style={styles.eyebrow}>PARKING REMINDER</Text>
 
-          <Text style={[styles.title, { color: colors.text }]}>
-            Set a reminder.
-          </Text>
+          <Text style={styles.title}>Set a reminder</Text>
 
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          <Text style={styles.subtitle}>
             Get notified about your parking so you don't lose track of time.
           </Text>
         </View>
 
-        <View
-          style={[
-            styles.spotCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.cardLabel, { color: colors.textSecondary }]}>
-            CURRENTLY PARKED AT
-          </Text>
+        <View style={styles.spotCard}>
+          <View style={styles.spotIcon}>
+            <Ionicons name="car" size={18} color={colors.primary} />
+          </View>
 
-          <Text style={[styles.spotName, { color: colors.text }]}>
-            {spotName}
-          </Text>
+          <View style={styles.spotText}>
+            <Text style={styles.cardLabel}>CURRENTLY PARKED AT</Text>
+
+            <Text style={styles.spotName} numberOfLines={2}>
+              {spotName}
+            </Text>
+          </View>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        <Text style={styles.sectionTitle}>
           When should we remind you?
         </Text>
 
         <View style={styles.optionsContainer}>
-          <Pressable
+          <OptionCard
+            icon="timer-outline"
+            title="15 minutes"
+            description="Quick reminder"
+            selected={selectedOption === 15}
             onPress={() => setSelectedOption(15)}
-            style={[
-              styles.optionCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor:
-                  selectedOption === 15
-                    ? colors.primary
-                    : colors.border,
-              },
-              selectedOption === 15 && styles.selectedOption,
-            ]}
-          >
-            <Text style={[styles.optionValue, { color: colors.text }]}>
-              15 minutes
-            </Text>
+          />
 
-            <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
-              Quick reminder
-            </Text>
-
-            {selectedOption === 15 && (
-              <Text style={[styles.selectedLabel, { color: colors.primary }]}>
-                SELECTED
-              </Text>
-            )}
-          </Pressable>
-
-          <Pressable
+          <OptionCard
+            icon="alarm-outline"
+            title="30 minutes"
+            description="More preparation time"
+            selected={selectedOption === 30}
             onPress={() => setSelectedOption(30)}
-            style={[
-              styles.optionCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor:
-                  selectedOption === 30
-                    ? colors.primary
-                    : colors.border,
-              },
-              selectedOption === 30 && styles.selectedOption,
-            ]}
-          >
-            <Text style={[styles.optionValue, { color: colors.text }]}>
-              30 minutes
-            </Text>
+          />
 
-            <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
-              More preparation time
-            </Text>
-
-            {selectedOption === 30 && (
-              <Text style={[styles.selectedLabel, { color: colors.primary }]}>
-                SELECTED
-              </Text>
-            )}
-          </Pressable>
-
-          <Pressable
+          <OptionCard
+            icon="create-outline"
+            title="Custom duration"
+            description="Choose your own time"
+            selected={selectedOption === 'custom'}
             onPress={() => setSelectedOption('custom')}
-            style={[
-              styles.optionCard,
-              {
-                backgroundColor: colors.surface,
-                borderColor:
-                  selectedOption === 'custom'
-                    ? colors.primary
-                    : colors.border,
-              },
-              selectedOption === 'custom' && styles.selectedOption,
-            ]}
-          >
-            <Text style={[styles.optionValue, { color: colors.text }]}>
-              Custom duration
-            </Text>
-
-            <Text style={[styles.optionDescription, { color: colors.textSecondary }]}>
-              Choose your own time
-            </Text>
-
-            {selectedOption === 'custom' && (
-              <Text style={[styles.selectedLabel, { color: colors.primary }]}>
-                SELECTED
-              </Text>
-            )}
-          </Pressable>
+          />
         </View>
 
         {selectedOption === 'custom' && (
           <View style={styles.customContainer}>
-            <Text style={[styles.inputLabel, { color: colors.text }]}>
+            <Text style={styles.inputLabel}>
               Reminder after (minutes)
             </Text>
 
-            <TextInput
-              value={customMinutes}
-              onChangeText={setCustomMinutes}
-              placeholder="Enter minutes"
-              placeholderTextColor={colors.textSecondary}
-              keyboardType="number-pad"
-              style={[
-                styles.customInput,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  color: colors.text,
-                },
-              ]}
-              editable={!saving}
-            />
+            <View style={styles.customInputRow}>
+              <TextInput
+                value={customMinutes}
+                onChangeText={setCustomMinutes}
+                placeholder="Enter minutes"
+                placeholderTextColor={colors.textSecondary}
+                keyboardType="number-pad"
+                style={styles.customInput}
+                editable={!saving}
+                onFocus={keyboard.revealOnFocus}
+                accessibilityLabel="Reminder after, in minutes"
+              />
+
+              <Text style={styles.customSuffix}>min</Text>
+            </View>
           </View>
         )}
 
-        <View
-          style={[
-            styles.notice,
-            { backgroundColor: colors.primary + '12' },
-          ]}
-        >
-          <Text style={[styles.noticeText, { color: colors.text }]}>
+        <View style={styles.notice}>
+          <Ionicons
+            name="notifications-outline"
+            size={17}
+            color={colors.textSecondary}
+          />
+          <Text style={styles.noticeText}>
             ParkCity will send you a notification even when the app is closed.
           </Text>
         </View>
 
-        <Pressable
+        <PrimaryButton
+          title="Set reminder"
           onPress={handleSetReminder}
+          loading={saving}
           disabled={saving}
-          style={({ pressed }) => [
-            styles.submitButton,
-            { backgroundColor: colors.primary },
-            pressed && !saving && styles.buttonPressed,
-            saving && styles.buttonDisabled,
-          ]}
-        >
-          {saving ? (
-            <ActivityIndicator color="#FFFFFF" />
-          ) : (
-            <Text style={styles.submitText}>
-              Set reminder
-            </Text>
-          )}
-        </Pressable>
+        />
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    paddingHorizontal: spacing.lg,
-    paddingTop: 60,
-    paddingBottom: spacing.xl,
-  },
-  skipButton: {
-    alignSelf: 'flex-end',
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.lg,
-  },
-  skipText: {
-    fontSize: 14,
-    fontWeight: fontWeight.medium,
-  },
-  header: {
-    marginBottom: spacing.xl,
-  },
-  eyebrow: {
-    fontSize: 11,
-    letterSpacing: 1.5,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing.sm,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: fontWeight.bold,
-  },
-  subtitle: {
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: spacing.xs,
-  },
-  spotCard: {
-    padding: spacing.lg,
-    borderRadius: 18,
-    borderWidth: 1,
-    marginBottom: spacing.xl,
-  },
-  cardLabel: {
-    fontSize: 10,
-    letterSpacing: 1.2,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing.sm,
-  },
-  spotName: {
-    fontSize: 18,
-    fontWeight: fontWeight.bold,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: fontWeight.bold,
-    marginBottom: spacing.md,
-  },
-  optionsContainer: {
-    gap: spacing.md,
-  },
-  optionCard: {
-    padding: spacing.lg,
-    borderRadius: 16,
-    borderWidth: 1,
-  },
-  selectedOption: {
-    borderWidth: 2,
-  },
-  optionValue: {
-    fontSize: 16,
-    fontWeight: fontWeight.bold,
-  },
-  optionDescription: {
-    fontSize: 13,
-    marginTop: spacing.xs,
-  },
-  selectedLabel: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 1,
-    marginTop: spacing.md,
-  },
-  customContainer: {
-    marginTop: spacing.lg,
-  },
-  inputLabel: {
-    fontSize: 14,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing.sm,
-  },
-  customInput: {
-    borderWidth: 1,
-    borderRadius: 12,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    fontSize: 16,
-  },
-  notice: {
-    padding: spacing.md,
-    borderRadius: 13,
-    marginTop: spacing.xl,
-    marginBottom: spacing.lg,
-  },
-  noticeText: {
-    fontSize: 13,
-    lineHeight: 20,
-  },
-  submitButton: {
-    minHeight: 54,
-    padding: spacing.lg,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  submitText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: fontWeight.semibold,
-  },
-  buttonPressed: {
-    opacity: 0.85,
-  },
-  buttonDisabled: {
-    opacity: 0.65,
-  },
-});
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+    },
+    skipButton: {
+      alignSelf: 'flex-end',
+      paddingVertical: spacing.sm,
+      marginBottom: spacing.sm,
+    },
+    skipText: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      fontWeight: fontWeight.semibold,
+    },
+    header: {
+      marginBottom: spacing.lg,
+    },
+    eyebrow: {
+      color: colors.goldDeep,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.overline,
+      marginBottom: spacing.xs,
+    },
+    title: {
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+    },
+    subtitle: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      lineHeight: 21,
+      marginTop: spacing.xs,
+    },
+
+    // Parked-at card
+    spotCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      padding: 14,
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      marginBottom: spacing.lg,
+    },
+    spotIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    spotText: {
+      flex: 1,
+      minWidth: 0,
+    },
+    cardLabel: {
+      color: colors.textSecondary,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.semibold,
+      letterSpacing: letterSpacing.overline,
+      marginBottom: 3,
+    },
+    spotName: {
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 21,
+      fontWeight: fontWeight.bold,
+    },
+
+    // Options
+    sectionTitle: {
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 22,
+      fontWeight: fontWeight.bold,
+      marginBottom: 12,
+    },
+    optionsContainer: {
+      gap: 10,
+    },
+    customContainer: {
+      marginTop: spacing.md,
+    },
+    inputLabel: {
+      color: colors.text,
+      fontSize: typography.small,
+      fontWeight: fontWeight.semibold,
+      marginBottom: spacing.sm,
+    },
+    customInputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      minHeight: 50,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.surface,
+    },
+    customInput: {
+      flex: 1,
+      paddingVertical: 12,
+      color: colors.text,
+      fontSize: typography.body,
+    },
+    customSuffix: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      fontWeight: fontWeight.medium,
+    },
+
+    // Notice
+    notice: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: 12,
+      borderRadius: radius.lg,
+      backgroundColor: colors.surfaceMuted,
+      marginTop: spacing.lg,
+      marginBottom: spacing.lg,
+    },
+    noticeText: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 12.5,
+      lineHeight: 18,
+    },
+  });

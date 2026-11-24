@@ -1,19 +1,31 @@
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import {
   View,
   Text,
   Switch,
   StyleSheet,
-  TouchableOpacity,
+  Pressable,
+  ScrollView,
 } from 'react-native'
 import Constants from 'expo-constants'
+import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../contexts/ThemeContext'
 import { API_BASE_URL } from '../lib/api'
 import { supabase } from '../lib/supabase'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../App'
+import {
+  colors as lightColors,
+  fontWeight,
+  letterSpacing,
+  radius,
+  shadow,
+  spacing,
+  typography,
+} from '../constants/tokens'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
 
@@ -24,8 +36,12 @@ interface ProfilePreferences {
 
 type NotificationPreference = 'reminders' | 'satisfaction'
 
+type IoniconName = keyof typeof Ionicons.glyphMap
+
 export default function SettingsScreen() {
   const { colors, isDark, setTheme } = useTheme()
+  const styles = useMemo(() => createStyles(colors), [colors])
+  const insets = useSafeAreaInsets()
   const navigation = useNavigation<Nav>()
 
   const [reminders, setReminders] = useState<boolean>(true)
@@ -91,113 +107,186 @@ export default function SettingsScreen() {
     }
   }
 
-  return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
+  // Light: grey track on white; dark: deep track so the white thumb stands out.
+  const switchTrack = {
+    false: isDark ? colors.borderStrong : colors.textSecondary,
+    true: colors.primary,
+  }
 
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-        Appearance
-      </Text>
-      <View
-        style={[
-          styles.row,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
-        <Text style={[styles.rowLabel, { color: colors.text }]}>Dark Mode</Text>
-        <Switch
-          value={isDark}
-          onValueChange={(val) => void setTheme(val ? 'dark' : 'light')}
-          trackColor={{ true: colors.primary }}
-          thumbColor="#fff"
-        />
+  const settingRow = (
+    icon: IoniconName,
+    label: string,
+    control: React.ReactNode,
+    showDivider: boolean,
+  ) => (
+    <View style={[styles.settingRow, showDivider && styles.rowDivider]}>
+      <View style={styles.iconCircle}>
+        <Ionicons name={icon} size={18} color={colors.primaryDeep} />
       </View>
-
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-        Notifications
-      </Text>
-      <View
-        style={[
-          styles.row,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
-        <Text style={[styles.rowLabel, { color: colors.text }]}>
-          Parking Reminders
-        </Text>
-        <Switch
-          value={reminders}
-          onValueChange={(val) => void updateNotificationPref('reminders', val)}
-          trackColor={{ true: colors.primary }}
-          thumbColor="#fff"
-        />
-      </View>
-      <View
-        style={[
-          styles.row,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
-        <Text style={[styles.rowLabel, { color: colors.text }]}>
-          Rate Your Experience
-        </Text>
-        <Switch
-          value={satisfactionPrompts}
-          onValueChange={(val) =>
-            void updateNotificationPref('satisfaction', val)
-          }
-          trackColor={{ true: colors.primary }}
-          thumbColor="#fff"
-        />
-      </View>
-
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>
-        About
-      </Text>
-      <View
-        style={[
-          styles.row,
-          { backgroundColor: colors.surface, borderColor: colors.border },
-        ]}
-      >
-        <Text style={[styles.rowLabel, { color: colors.text }]}>Version</Text>
-        <Text style={[styles.rowValue, { color: colors.textSecondary }]}>
-          {Constants.expoConfig?.version ?? '1.0.0'}
-        </Text>
-      </View>
-
-      <TouchableOpacity
-        style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={() => navigation.navigate('Legal')}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.rowLabel, { color: colors.text }]}>Privacy & Legal</Text>
-        <Text style={{ color: colors.textSecondary, fontSize: 18 }}>›</Text>
-      </TouchableOpacity>
-
+      <Text style={styles.rowLabel}>{label}</Text>
+      {control}
     </View>
+  )
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.container,
+        { paddingTop: insets.top + spacing.sm },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
+      <Pressable
+        onPress={() => navigation.goBack()}
+        style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        hitSlop={6}
+      >
+        <Ionicons name="arrow-back" size={20} color={colors.text} />
+      </Pressable>
+
+      <Text style={styles.title}>Settings</Text>
+
+      <Text style={styles.sectionLabel}>APPEARANCE</Text>
+      <View style={styles.card}>
+        {settingRow(
+          'moon-outline',
+          'Dark Mode',
+          <Switch
+            value={isDark}
+            onValueChange={(val) => void setTheme(val ? 'dark' : 'light')}
+            trackColor={switchTrack}
+            thumbColor={colors.white}
+            accessibilityLabel="Dark Mode"
+          />,
+          false,
+        )}
+      </View>
+
+      <Text style={styles.sectionLabel}>NOTIFICATIONS</Text>
+      <View style={styles.card}>
+        {settingRow(
+          'notifications-outline',
+          'Parking Reminders',
+          <Switch
+            value={reminders}
+            onValueChange={(val) => void updateNotificationPref('reminders', val)}
+            trackColor={switchTrack}
+            thumbColor={colors.white}
+            accessibilityLabel="Parking Reminders"
+          />,
+          true,
+        )}
+        {settingRow(
+          'star-outline',
+          'Rate Your Experience',
+          <Switch
+            value={satisfactionPrompts}
+            onValueChange={(val) =>
+              void updateNotificationPref('satisfaction', val)
+            }
+            trackColor={switchTrack}
+            thumbColor={colors.white}
+            accessibilityLabel="Rate Your Experience"
+          />,
+          false,
+        )}
+      </View>
+
+      <Text style={styles.sectionLabel}>ABOUT</Text>
+      <View style={styles.card}>
+        {settingRow(
+          'information-circle-outline',
+          'Version',
+          <Text style={styles.rowValue}>
+            {Constants.expoConfig?.version ?? '1.0.0'}
+          </Text>,
+          false,
+        )}
+      </View>
+    </ScrollView>
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, padding: 20 },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 24,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  rowLabel: { fontSize: 15 },
-  rowValue: { fontSize: 14 },
-})
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+    },
+    pressed: {
+      opacity: 0.75,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+      ...shadow.sm,
+    },
+    title: {
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+    },
+    sectionLabel: {
+      color: colors.goldDeep,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.overline,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+      marginLeft: spacing.xs,
+    },
+    card: {
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      overflow: 'hidden',
+    },
+    settingRow: {
+      minHeight: 60,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      paddingHorizontal: spacing.md,
+      paddingVertical: 10,
+    },
+    rowDivider: {
+      borderBottomWidth: StyleSheet.hairlineWidth,
+      borderBottomColor: colors.border,
+    },
+    iconCircle: {
+      width: 36,
+      height: 36,
+      borderRadius: 18,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    rowLabel: {
+      flex: 1,
+      color: colors.text,
+      fontSize: 15,
+      fontWeight: fontWeight.semibold,
+    },
+    rowValue: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+    },
+  })
