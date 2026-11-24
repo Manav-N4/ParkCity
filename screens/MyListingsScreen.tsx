@@ -1,5 +1,5 @@
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -10,6 +10,8 @@ import {
   TextInput,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../App';
@@ -23,13 +25,17 @@ import {
 } from '../lib/api';
 import { useTheme } from '../contexts/ThemeContext';
 import { useDialog } from '../contexts/DialogContext';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import VerificationBadge from '../components/VerificationBadge';
 import PrimaryButton from '../components/ui/PrimaryButton';
+import EmptyState from '../components/ui/EmptyState';
+import SkeletonCard from '../components/ui/SkeletonCard';
 import {
+  colors as lightColors,
   fontWeight,
+  letterSpacing,
   radius,
   shadow,
-  size,
   spacing,
   typography,
 } from '../constants/tokens';
@@ -46,6 +52,8 @@ type AvailabilityDraft = {
   available: string;
 };
 
+type IoniconName = keyof typeof Ionicons.glyphMap;
+
 const statusLabels: Record<ListingDetails['availability_status'], string> = {
   live: 'Live availability',
   stale: 'Recently updated',
@@ -54,6 +62,9 @@ const statusLabels: Record<ListingDetails['availability_status'], string> = {
 
 export default function MyListingsScreen({ navigation }: Props) {
   const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardAwareScroll();
   const { showDialog } = useDialog();
 
   const [listings, setListings] = useState<OwnerSpot[]>([]);
@@ -311,6 +322,37 @@ export default function MyListingsScreen({ navigation }: Props) {
     return 'Price unavailable';
   };
 
+  // ---------- Presentation helpers ----------
+
+  const statusTone = (details: ListingDetails) => {
+    if (details.available_count === null || details.total_count === null) {
+      return 'neutral' as const;
+    }
+    if (details.availability_status === 'live') return 'live' as const;
+    if (details.availability_status === 'stale') return 'stale' as const;
+    return 'neutral' as const;
+  };
+
+  const metricTile = (
+    icon: IoniconName,
+    label: string,
+    value: string,
+    hint?: string,
+  ) => (
+    <View style={styles.metricTile}>
+      <View style={styles.metricIcon}>
+        <Ionicons name={icon} size={16} color={colors.goldDeep} />
+      </View>
+      <Text style={styles.metricValue} numberOfLines={1}>
+        {value}
+      </Text>
+      <Text style={styles.metricLabel} numberOfLines={1}>
+        {label}
+      </Text>
+      {hint ? <Text style={styles.metricHint}>{hint}</Text> : null}
+    </View>
+  );
+
   const renderAvailability = (spot: OwnerSpot) => {
     const { details } = spot;
     const isSaving = savingSpotId === details.id;
@@ -325,74 +367,54 @@ export default function MyListingsScreen({ navigation }: Props) {
       };
 
       return (
-        <View
-          style={[
-            styles.setupContainer,
-            {
-              backgroundColor: colors.background,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
-            Set up availability
-          </Text>
+        <View style={styles.availabilityBox}>
+          <View style={styles.availabilityTitleRow}>
+            <Ionicons
+              name="options-outline"
+              size={16}
+              color={colors.goldDeep}
+            />
+            <Text style={styles.availabilityTitle}>
+              Set up availability
+            </Text>
+          </View>
 
-          <Text
-            style={[
-              styles.helperText,
-              { color: colors.textSecondary },
-            ]}
-          >
+          <Text style={styles.helperText}>
             Add your parking capacity to start managing available slots.
           </Text>
 
           <View style={styles.inputRow}>
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                Total slots
-              </Text>
+              <Text style={styles.inputLabel}>Total slots</Text>
 
               <TextInput
                 value={draft.total}
                 onChangeText={(value) =>
                   handleDraftChange(details.id, 'total', value)
                 }
+                onFocus={keyboard.revealOnFocus}
                 keyboardType="number-pad"
                 placeholder="e.g. 10"
                 placeholderTextColor={colors.textSecondary}
-                style={[
-                  styles.numberInput,
-                  {
-                    color: colors.text,
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
+                style={styles.numberInput}
+                accessibilityLabel={`Total slots for ${details.name}`}
               />
             </View>
 
             <View style={styles.inputGroup}>
-              <Text style={[styles.inputLabel, { color: colors.textSecondary }]}>
-                Available now
-              </Text>
+              <Text style={styles.inputLabel}>Available now</Text>
 
               <TextInput
                 value={draft.available}
                 onChangeText={(value) =>
                   handleDraftChange(details.id, 'available', value)
                 }
+                onFocus={keyboard.revealOnFocus}
                 keyboardType="number-pad"
                 placeholder="e.g. 4"
                 placeholderTextColor={colors.textSecondary}
-                style={[
-                  styles.numberInput,
-                  {
-                    color: colors.text,
-                    backgroundColor: colors.surface,
-                    borderColor: colors.border,
-                  },
-                ]}
+                style={styles.numberInput}
+                accessibilityLabel={`Available slots now for ${details.name}`}
               />
             </View>
           </View>
@@ -409,24 +431,16 @@ export default function MyListingsScreen({ navigation }: Props) {
 
     const available = details.available_count;
     const total = details.total_count;
+    const decreaseDisabled = available <= 0 || savingSpotId !== null;
+    const increaseDisabled = available >= total || savingSpotId !== null;
+    const fillRatio = total > 0 ? Math.min(1, available / total) : 0;
 
     return (
-      <View
-        style={[
-          styles.availabilityContainer,
-          {
-            backgroundColor: colors.background,
-            borderColor: colors.border,
-          },
-        ]}
-      >
+      <View style={styles.availabilityBox}>
         <View style={styles.availabilityHeading}>
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              Available slots
-            </Text>
-
-            <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+          <View style={styles.availabilityText}>
+            <Text style={styles.availabilityTitle}>Available slots</Text>
+            <Text style={styles.helperText}>
               {available} of {total} parking slots available
             </Text>
           </View>
@@ -435,240 +449,180 @@ export default function MyListingsScreen({ navigation }: Props) {
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Decrease available slots"
-              accessibilityState={{
-                disabled: available <= 0 || savingSpotId !== null,
-              }}
-              disabled={available <= 0 || savingSpotId !== null}
+              accessibilityState={{ disabled: decreaseDisabled }}
+              disabled={decreaseDisabled}
               onPress={() => handleAvailabilityChange(spot, -1)}
-              style={[
+              hitSlop={6}
+              style={({ pressed }) => [
                 styles.stepperButton,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  opacity: available <= 0 || savingSpotId !== null ? 0.4 : 1,
-                },
+                decreaseDisabled && styles.stepperButtonDisabled,
+                pressed && styles.pressed,
               ]}
             >
-              <Text style={[styles.stepperText, { color: colors.text }]}>
-                −
-              </Text>
+              <Ionicons name="remove" size={20} color={colors.primaryDeep} />
             </Pressable>
 
-            <Text
-              style={[
-                styles.availableCount,
-                { color: colors.text },
-              ]}
-            >
-              {available}
-            </Text>
+            <Text style={styles.availableCount}>{available}</Text>
 
             <Pressable
               accessibilityRole="button"
               accessibilityLabel="Increase available slots"
-              accessibilityState={{
-                disabled: available >= total || savingSpotId !== null,
-              }}
-              disabled={available >= total || savingSpotId !== null}
+              accessibilityState={{ disabled: increaseDisabled }}
+              disabled={increaseDisabled}
               onPress={() => handleAvailabilityChange(spot, 1)}
-              style={[
+              hitSlop={6}
+              style={({ pressed }) => [
                 styles.stepperButton,
-                {
-                  backgroundColor: colors.surface,
-                  borderColor: colors.border,
-                  opacity: available >= total || savingSpotId !== null ? 0.4 : 1,
-                },
+                increaseDisabled && styles.stepperButtonDisabled,
+                pressed && styles.pressed,
               ]}
             >
-              <Text style={[styles.stepperText, { color: colors.text }]}>
-                +
-              </Text>
+              <Ionicons name="add" size={20} color={colors.primaryDeep} />
             </Pressable>
           </View>
+        </View>
+
+        {/* Display-only occupancy bar */}
+        <View style={styles.progressTrack}>
+          <View
+            style={[styles.progressFill, { width: `${fillRatio * 100}%` }]}
+          />
         </View>
 
         {isSaving && (
           <View style={styles.savingRow}>
             <ActivityIndicator size="small" color={colors.primary} />
-            <Text style={[styles.savingText, { color: colors.textSecondary }]}>
-              Saving availability...
-            </Text>
+            <Text style={styles.savingText}>Saving availability...</Text>
           </View>
         )}
       </View>
     );
   };
 
+  const header = (
+    <>
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel="Go back"
+        onPress={() => navigation.goBack()}
+        style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        hitSlop={6}
+      >
+        <Ionicons name="arrow-back" size={20} color={colors.text} />
+      </Pressable>
+
+      <Text style={styles.eyebrow}>OWNER DASHBOARD</Text>
+      <Text style={styles.title}>My Listings</Text>
+      <Text style={styles.subtitle}>Manage your parking spaces</Text>
+    </>
+  );
+
   if (loading) {
     return (
       <View
         style={[
-          styles.centerContainer,
-          { backgroundColor: colors.background },
+          styles.screen,
+          styles.content,
+          { paddingTop: insets.top + spacing.sm },
         ]}
       >
-        <ActivityIndicator size="large" color={colors.primary} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-          Loading your listings...
-        </Text>
+        {header}
+        <Text style={styles.loadingText}>Loading your listings...</Text>
+        <SkeletonCard />
+        <SkeletonCard />
       </View>
     );
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View
-        style={[
-          styles.header,
+    <View style={styles.screen}>
+      <ScrollView
+        ref={keyboard.scrollRef}
+        onScroll={keyboard.handleScroll}
+        scrollEventThrottle={16}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[
+          styles.content,
           {
-            backgroundColor: colors.surface,
-            borderBottomColor: colors.border,
+            paddingTop: insets.top + spacing.sm,
+            paddingBottom:
+              Math.max(insets.bottom, spacing.md) +
+              spacing.xl +
+              keyboard.keyboardHeight,
           },
         ]}
-      >
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Text style={[styles.backText, { color: colors.text }]}>
-            ‹
-          </Text>
-        </Pressable>
-
-        <View style={styles.headerTextContainer}>
-          <Text style={[styles.headerTitle, { color: colors.text }]}>
-            My Listings
-          </Text>
-          <Text style={[styles.headerSubtitle, { color: colors.textSecondary }]}>
-            Manage your parking spaces
-          </Text>
-        </View>
-      </View>
-
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
             tintColor={colors.primary}
+            colors={[colors.primary]}
+            progressBackgroundColor={colors.surface}
           />
         }
       >
+        {header}
+
         {listings.length > 0 && (
-          <View style={styles.overviewSection}>
+          <View style={styles.overviewCard}>
             <View style={styles.overviewHeading}>
-              <Text style={[styles.overviewTitle, { color: colors.text }]}>
-                Performance overview
-              </Text>
-              <Text style={[styles.overviewSubtitle, { color: colors.textSecondary }]}>
+              <Text style={styles.overviewTitle}>Performance overview</Text>
+              <Text style={styles.overviewSubtitle}>
                 All your parking listings
               </Text>
             </View>
 
             <View style={styles.metricsGrid}>
-              <View
-                style={[
-                  styles.metricCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                ]}
-              >
-                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-                  TOTAL VIEWS
-                </Text>
-                <Text style={[styles.metricValue, { color: colors.text }]}>
-                  {totalViews.toLocaleString('en-IN')}
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.metricCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                ]}
-              >
-                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-                  NAVIGATIONS
-                </Text>
-                <Text style={[styles.metricValue, { color: colors.text }]}>
-                  {totalNavigations.toLocaleString('en-IN')}
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.metricCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                ]}
-              >
-                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-                  CONVERSION
-                </Text>
-                <Text style={[styles.metricValue, { color: colors.text }]}>
-                  {navigationConversion.toFixed(1)}%
-                </Text>
-                <Text style={[styles.metricHint, { color: colors.textSecondary }]}>
-                  Navigations / views
-                </Text>
-              </View>
-
-              <View
-                style={[
-                  styles.metricCard,
-                  { backgroundColor: colors.surface, borderColor: colors.border },
-                ]}
-              >
-                <Text style={[styles.metricLabel, { color: colors.textSecondary }]}>
-                  ACTIVE LISTINGS
-                </Text>
-                <Text style={[styles.metricValue, { color: colors.text }]}>
-                  {listings.length}
-                </Text>
-              </View>
+              {metricTile(
+                'eye-outline',
+                'Total views',
+                totalViews.toLocaleString('en-IN'),
+              )}
+              {metricTile(
+                'navigate-outline',
+                'Navigations',
+                totalNavigations.toLocaleString('en-IN'),
+              )}
+              {metricTile(
+                'trending-up-outline',
+                'Conversion',
+                `${navigationConversion.toFixed(1)}%`,
+                'Navigations / views',
+              )}
+              {metricTile(
+                'business-outline',
+                'Active listings',
+                String(listings.length),
+              )}
             </View>
           </View>
         )}
 
         {screenError && (
-          <View
-            style={[
-              styles.errorContainer,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.error,
-              },
-            ]}
-          >
-            <Text style={[styles.errorText, { color: colors.error }]}>
-              {screenError}
-            </Text>
+          <View style={styles.errorBanner}>
+            <Ionicons
+              name="alert-circle"
+              size={18}
+              color={colors.errorText}
+            />
+            <Text style={styles.errorText}>{screenError}</Text>
           </View>
         )}
 
         {listings.length === 0 && !screenError ? (
-          <View
-            style={[
-              styles.emptyContainer,
-              {
-                backgroundColor: colors.surface,
-                borderColor: colors.border,
-              },
-            ]}
-          >
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>
-              No listings yet
-            </Text>
-
-            <Text style={[styles.emptyDescription, { color: colors.textSecondary }]}>
-              Parking spaces you claim will appear here.
-            </Text>
+          <View style={styles.emptyCard}>
+            <EmptyState
+              icon="business-outline"
+              heading="No listings yet"
+              subtext="Parking spaces you claim will appear here."
+            />
           </View>
         ) : listings.length > 0 ? (
           <>
-            <Text style={[styles.listingCount, { color: colors.textSecondary }]}>
-              {listings.length} {listings.length === 1 ? 'listing' : 'listings'}
+            <Text style={styles.listingCount}>
+              {listings.length}{' '}
+              {listings.length === 1 ? 'LISTING' : 'LISTINGS'}
             </Text>
 
             {listings.map((spot) => {
@@ -682,83 +636,67 @@ export default function MyListingsScreen({ navigation }: Props) {
                   ? details.verification_tier
                   : 'unverified';
 
+              const tone = statusTone(details);
+
               return (
-                <View
-                  key={details.id}
-                  style={[
-                    styles.listingCard,
-                    {
-                      backgroundColor: colors.surface,
-                      borderColor: colors.border,
-                    },
-                  ]}
-                >
+                <View key={details.id} style={styles.listingCard}>
                   <View style={styles.cardTopRow}>
+                    <View style={styles.spotIcon}>
+                      <Ionicons
+                        name="car-outline"
+                        size={20}
+                        color={colors.goldDeep}
+                      />
+                    </View>
+
                     <View style={styles.titleContainer}>
-                      <Text
-                        numberOfLines={2}
-                        style={[styles.spotName, { color: colors.text }]}
-                      >
+                      <Text numberOfLines={2} style={styles.spotName}>
                         {details.name}
                       </Text>
 
-                      <Text
-                        numberOfLines={2}
-                        style={[
-                          styles.address,
-                          { color: colors.textSecondary },
-                        ]}
-                      >
+                      <Text numberOfLines={2} style={styles.address}>
                         {details.address || 'Address unavailable'}
+                      </Text>
+
+                      <View style={styles.badgeRow}>
+                        <VerificationBadge tier={verificationTier} />
+                      </View>
+                    </View>
+                  </View>
+
+                  <View style={styles.infoStrip}>
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>RATE</Text>
+                      <Text style={styles.infoValue} numberOfLines={1}>
+                        {getPrice(details)}
                       </Text>
                     </View>
 
-                    <VerificationBadge tier={verificationTier} />
+                    <View style={styles.infoDivider} />
+
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>VIEWS</Text>
+                      <Text style={styles.infoValue}>{stats.views}</Text>
+                    </View>
+
+                    <View style={styles.infoDivider} />
+
+                    <View style={styles.infoItem}>
+                      <Text style={styles.infoLabel}>NAVIGATIONS</Text>
+                      <Text style={styles.infoValue}>{stats.navigations}</Text>
+                    </View>
                   </View>
 
                   <View
                     style={[
-                      styles.priceRow,
-                      { borderTopColor: colors.border },
+                      styles.statusChip,
+                      tone === 'live'
+                        ? styles.statusChipLive
+                        : tone === 'stale'
+                          ? styles.statusChipStale
+                          : styles.statusChipNeutral,
                     ]}
                   >
-                    <Text style={[styles.priceLabel, { color: colors.textSecondary }]}>
-                      PARKING RATE
-                    </Text>
-
-                    <Text style={[styles.priceValue, { color: colors.text }]}>
-                      {getPrice(details)}
-                    </Text>
-                  </View>
-
-                  <View style={styles.statsRow}>
-                    <View style={styles.statItem}>
-                      <Text style={[styles.statValue, { color: colors.text }]}>
-                        {stats.views}
-                      </Text>
-                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                        Views
-                      </Text>
-                    </View>
-
-                    <View
-                      style={[
-                        styles.statDivider,
-                        { backgroundColor: colors.border },
-                      ]}
-                    />
-
-                    <View style={styles.statItem}>
-                      <Text style={[styles.statValue, { color: colors.text }]}>
-                        {stats.navigations}
-                      </Text>
-                      <Text style={[styles.statLabel, { color: colors.textSecondary }]}>
-                        Navigations
-                      </Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.statusRow}>
                     <View
                       style={[
                         styles.statusDot,
@@ -772,11 +710,14 @@ export default function MyListingsScreen({ navigation }: Props) {
                         },
                       ]}
                     />
-
                     <Text
                       style={[
                         styles.statusText,
-                        { color: colors.textSecondary },
+                        tone === 'live'
+                          ? styles.statusTextLive
+                          : tone === 'stale'
+                            ? styles.statusTextStale
+                            : styles.statusTextNeutral,
                       ]}
                     >
                       {details.available_count === null ||
@@ -797,338 +738,373 @@ export default function MyListingsScreen({ navigation }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    content: {
+      paddingHorizontal: spacing.lg,
+    },
+    pressed: {
+      opacity: 0.75,
+    },
 
-  centerContainer: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: spacing.md,
-  },
+    // Header
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+      ...shadow.sm,
+    },
+    eyebrow: {
+      color: colors.goldDeep,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.overline,
+      marginBottom: spacing.xs,
+    },
+    title: {
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+    },
+    subtitle: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      lineHeight: typography.smallLineHeight,
+      marginTop: spacing.xs,
+      marginBottom: spacing.lg,
+    },
+    loadingText: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      marginBottom: spacing.md,
+    },
 
-  loadingText: {
-    fontSize: typography.body,
-  },
+    // Overview
+    overviewCard: {
+      padding: spacing.md,
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      marginBottom: spacing.md,
+      ...shadow.sm,
+    },
+    overviewHeading: {
+      marginBottom: 12,
+    },
+    overviewTitle: {
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 22,
+      fontWeight: fontWeight.bold,
+    },
+    overviewSubtitle: {
+      color: colors.textSecondary,
+      fontSize: typography.caption,
+      lineHeight: typography.captionLineHeight,
+      marginTop: 2,
+    },
+    metricsGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      justifyContent: 'space-between',
+      rowGap: 10,
+    },
+    metricTile: {
+      width: '48.5%',
+      padding: 12,
+      borderRadius: radius.lg,
+      backgroundColor: colors.surfaceMuted,
+    },
+    metricIcon: {
+      width: 28,
+      height: 28,
+      borderRadius: 14,
+      backgroundColor: colors.champagneSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.sm,
+    },
+    metricValue: {
+      color: colors.text,
+      fontSize: 22,
+      lineHeight: 28,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.snug,
+    },
+    metricLabel: {
+      color: colors.textSecondary,
+      fontSize: typography.caption,
+      lineHeight: typography.captionLineHeight,
+      marginTop: 1,
+    },
+    metricHint: {
+      color: colors.textSecondary,
+      fontSize: 11,
+      lineHeight: 14,
+      marginTop: 2,
+    },
 
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.md,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-  },
+    // Error / empty
+    errorBanner: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      padding: 12,
+      borderRadius: radius.lg,
+      backgroundColor: colors.errorSoft,
+      marginBottom: spacing.md,
+    },
+    errorText: {
+      flex: 1,
+      color: colors.text,
+      fontSize: typography.small,
+      lineHeight: typography.smallLineHeight,
+    },
+    emptyCard: {
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
 
-  backButton: {
-    width: 42,
-    height: 42,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: spacing.sm,
-  },
+    // Listing cards
+    listingCount: {
+      color: colors.goldDeep,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.overline,
+      marginTop: spacing.sm,
+      marginBottom: spacing.sm,
+      marginLeft: spacing.xs,
+    },
+    listingCard: {
+      padding: spacing.md,
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      marginBottom: spacing.md,
+      ...shadow.sm,
+    },
+    cardTopRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 12,
+    },
+    spotIcon: {
+      width: 42,
+      height: 42,
+      borderRadius: 21,
+      backgroundColor: colors.champagneSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    titleContainer: {
+      flex: 1,
+      minWidth: 0,
+    },
+    spotName: {
+      color: colors.text,
+      fontSize: 17,
+      lineHeight: 22,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.snug,
+    },
+    address: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 2,
+    },
+    badgeRow: {
+      marginTop: spacing.sm,
+    },
+    infoStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 14,
+      paddingVertical: 10,
+      paddingHorizontal: 12,
+      borderRadius: radius.lg,
+      backgroundColor: colors.surfaceMuted,
+    },
+    infoItem: {
+      flex: 1,
+      minWidth: 0,
+      alignItems: 'center',
+    },
+    infoDivider: {
+      width: StyleSheet.hairlineWidth,
+      height: 28,
+      backgroundColor: colors.borderStrong,
+    },
+    infoLabel: {
+      color: colors.textSecondary,
+      fontSize: 10,
+      lineHeight: 13,
+      fontWeight: fontWeight.semibold,
+      letterSpacing: 0.6,
+    },
+    infoValue: {
+      color: colors.text,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: fontWeight.bold,
+      marginTop: 2,
+    },
+    statusChip: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 4,
+      borderRadius: radius.pill,
+    },
+    statusChipLive: {
+      backgroundColor: colors.primarySoft,
+    },
+    statusChipStale: {
+      backgroundColor: colors.champagneSoft,
+    },
+    statusChipNeutral: {
+      backgroundColor: colors.surfaceMuted,
+    },
+    statusDot: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+    },
+    statusText: {
+      fontSize: typography.caption,
+      fontWeight: fontWeight.semibold,
+    },
+    statusTextLive: {
+      color: colors.primaryDeep,
+    },
+    statusTextStale: {
+      color: colors.goldDeep,
+    },
+    statusTextNeutral: {
+      color: colors.textSecondary,
+    },
 
-  backText: {
-    fontSize: 34,
-    lineHeight: 38,
-  },
-
-  headerTextContainer: {
-    flex: 1,
-  },
-
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: fontWeight.bold,
-  },
-
-  headerSubtitle: {
-    fontSize: typography.small,
-    marginTop: 2,
-  },
-
-  scrollContent: {
-    padding: spacing.md,
-    paddingBottom: spacing.xl,
-  },
-
-  overviewSection: {
-    marginBottom: spacing.lg,
-  },
-
-  overviewHeading: {
-    marginBottom: spacing.md,
-  },
-
-  overviewTitle: {
-    fontSize: 19,
-    fontWeight: fontWeight.bold,
-  },
-
-  overviewSubtitle: {
-    fontSize: typography.small,
-    marginTop: spacing.xs,
-  },
-
-  metricsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-  },
-
-  metricCard: {
-    width: '48%',
-    flexGrow: 1,
-    minHeight: 104,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    justifyContent: 'center',
-    ...shadow.sm,
-  },
-
-  metricLabel: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 0.8,
-  },
-
-  metricValue: {
-    fontSize: 26,
-    fontWeight: fontWeight.bold,
-    marginTop: spacing.xs,
-  },
-
-  metricHint: {
-    fontSize: 11,
-    marginTop: 2,
-  },
-
-  listingCount: {
-    fontSize: typography.small,
-    fontWeight: fontWeight.medium,
-    marginBottom: spacing.md,
-  },
-
-  listingCard: {
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: spacing.md,
-    marginBottom: spacing.lg,
-    ...shadow.sm,
-  },
-
-  cardTopRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-
-  titleContainer: {
-    flex: 1,
-  },
-
-  spotName: {
-    fontSize: 19,
-    fontWeight: fontWeight.bold,
-    lineHeight: 25,
-  },
-
-  address: {
-    fontSize: typography.small,
-    lineHeight: typography.smallLineHeight,
-    marginTop: spacing.xs,
-  },
-
-  priceRow: {
-    marginTop: spacing.md,
-    paddingTop: spacing.md,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-
-  priceLabel: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 1,
-  },
-
-  priceValue: {
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-
-  statsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: spacing.md,
-    paddingVertical: spacing.sm,
-  },
-
-  statItem: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 2,
-  },
-
-  statValue: {
-    fontSize: 18,
-    fontWeight: fontWeight.bold,
-  },
-
-  statLabel: {
-    fontSize: 12,
-  },
-
-  statDivider: {
-    width: 1,
-    height: 32,
-  },
-
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.sm,
-    marginBottom: spacing.md,
-  },
-
-  statusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-
-  statusText: {
-    fontSize: typography.small,
-    fontWeight: fontWeight.medium,
-  },
-
-  setupContainer: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.md,
-  },
-
-  availabilityContainer: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-  },
-
-  sectionTitle: {
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-
-  helperText: {
-    fontSize: typography.small,
-    lineHeight: typography.smallLineHeight,
-    marginTop: spacing.xs,
-  },
-
-  inputRow: {
-    flexDirection: 'row',
-    gap: spacing.md,
-  },
-
-  inputGroup: {
-    flex: 1,
-    gap: spacing.xs,
-  },
-
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: fontWeight.medium,
-  },
-
-  numberInput: {
-    height: size.inputHeight,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.md,
-    fontSize: typography.body,
-  },
-
-  availabilityHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
-
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-  },
-
-  stepperButton: {
-    width: 38,
-    height: 38,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  stepperText: {
-    fontSize: 23,
-    lineHeight: 26,
-    fontWeight: fontWeight.medium,
-  },
-
-  availableCount: {
-    minWidth: 24,
-    textAlign: 'center',
-    fontSize: 18,
-    fontWeight: fontWeight.bold,
-  },
-
-  savingRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
-
-  savingText: {
-    fontSize: 12,
-  },
-
-  errorContainer: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginBottom: spacing.md,
-  },
-
-  errorText: {
-    fontSize: typography.small,
-    lineHeight: typography.smallLineHeight,
-  },
-
-  emptyContainer: {
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: spacing.xl,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-
-  emptyTitle: {
-    fontSize: 19,
-    fontWeight: fontWeight.bold,
-  },
-
-  emptyDescription: {
-    fontSize: typography.small,
-    textAlign: 'center',
-    lineHeight: typography.smallLineHeight,
-    marginTop: spacing.sm,
-  },
-});
+    // Availability
+    availabilityBox: {
+      marginTop: 14,
+      paddingTop: 14,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      gap: 10,
+    },
+    availabilityTitleRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+    },
+    availabilityHeading: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.md,
+    },
+    availabilityText: {
+      flex: 1,
+      minWidth: 0,
+    },
+    availabilityTitle: {
+      color: colors.text,
+      fontSize: 15,
+      lineHeight: 20,
+      fontWeight: fontWeight.bold,
+    },
+    helperText: {
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 18,
+      marginTop: 2,
+    },
+    inputRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    inputGroup: {
+      flex: 1,
+    },
+    inputLabel: {
+      color: colors.text,
+      fontSize: typography.caption + 1,
+      fontWeight: fontWeight.medium,
+      marginBottom: 6,
+    },
+    numberInput: {
+      minHeight: 48,
+      paddingHorizontal: 14,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.textSecondary,
+      backgroundColor: colors.surface,
+      color: colors.text,
+      fontSize: typography.body,
+    },
+    stepper: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    stepperButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    stepperButtonDisabled: {
+      opacity: 0.4,
+    },
+    availableCount: {
+      minWidth: 34,
+      textAlign: 'center',
+      color: colors.text,
+      fontSize: 22,
+      lineHeight: 28,
+      fontWeight: fontWeight.bold,
+      fontVariant: ['tabular-nums'],
+    },
+    progressTrack: {
+      height: 6,
+      borderRadius: 3,
+      backgroundColor: colors.surfaceMuted,
+      overflow: 'hidden',
+    },
+    progressFill: {
+      height: '100%',
+      borderRadius: 3,
+      backgroundColor: colors.primary,
+    },
+    savingRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+    },
+    savingText: {
+      color: colors.textSecondary,
+      fontSize: typography.caption + 1,
+    },
+  });

@@ -11,8 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useTheme } from '../../contexts/ThemeContext';
 import {
-  colors as lightColors,
   radius,
+  shadow,
   size,
   spacing,
   typography,
@@ -39,6 +39,8 @@ export default function SearchBar({
   const { colors } = useTheme();
   const [searchText, setSearchText] = useState('');
   const [isFocused, setIsFocused] = useState(false);
+  // Visual focus ring only; suggestion visibility still uses isFocused.
+  const [hasFocus, setHasFocus] = useState(false);
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [sessionToken, setSessionToken] = useState(
     () => `${Date.now()}-${Math.random().toString(36).slice(2)}`
@@ -111,23 +113,28 @@ export default function SearchBar({
           styles.inputContainer,
           {
             backgroundColor: colors.surface,
-            borderColor: isFocused ? colors.primary : colors.border,
+            borderColor: hasFocus ? colors.primary : colors.border,
           },
+          hasFocus && styles.inputContainerFocused,
         ]}
       >
         <Ionicons
           name="search-outline"
           size={size.iconMedium}
-          color={colors.textSecondary}
+          color={colors.goldDeep}
         />
 
         <TextInput
           style={[styles.input, { color: colors.text }]}
-          placeholder="Search a destination"
+          placeholder="Search a destination or area"
           placeholderTextColor={colors.textSecondary}
           value={searchText}
           onChangeText={setSearchText}
-          onFocus={() => setIsFocused(true)}
+          onFocus={() => {
+            setIsFocused(true);
+            setHasFocus(true);
+          }}
+          onBlur={() => setHasFocus(false)}
           autoCapitalize="words"
           autoCorrect={false}
           returnKeyType="search"
@@ -166,24 +173,34 @@ export default function SearchBar({
             keyExtractor={(item) => item.google_place_id}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => (
+            renderItem={({ item, index }) => (
               <Pressable
                 style={({ pressed }) => [
                   styles.suggestionItem,
                   {
                     borderBottomColor: colors.border,
+                    borderBottomWidth:
+                      index === suggestions.length - 1
+                        ? 0
+                        : StyleSheet.hairlineWidth,
                     backgroundColor: pressed
-                      ? colors.background
+                      ? colors.surfaceMuted
                       : colors.surface,
                   },
                 ]}
                 onPress={() => handleSelectSuggestion(item)}
               >
+                <Ionicons
+                  name="location-outline"
+                  size={size.iconSmall + 2}
+                  color={colors.textSecondary}
+                />
                 <Text
                   style={[
                     styles.suggestionName,
                     { color: colors.text },
                   ]}
+                  numberOfLines={2}
                 >
                   {item.description}
                 </Text>
@@ -202,13 +219,17 @@ const styles = StyleSheet.create({
     zIndex: 10,
   },
   inputContainer: {
-    minHeight: size.inputHeight,
+    minHeight: 54,
     paddingHorizontal: spacing.md,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
+    gap: spacing.sm + 2,
     borderWidth: 1,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
+    ...shadow.sm,
+  },
+  inputContainerFocused: {
+    borderWidth: 1.5,
   },
   input: {
     flex: 1,
@@ -222,25 +243,23 @@ const styles = StyleSheet.create({
   },
   dropdown: {
     marginTop: spacing.sm,
-    borderRadius: radius.md,
+    borderRadius: radius.lg,
     borderWidth: 1,
     maxHeight: 240,
-    shadowColor: lightColors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
+    overflow: 'hidden',
+    ...shadow.md,
   },
   suggestionItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm + 2,
     paddingHorizontal: spacing.md,
     paddingVertical: 14,
-    borderBottomWidth: 1,
   },
   suggestionName: {
+    flex: 1,
     fontSize: 15,
-    fontWeight: fontWeight.semibold,
+    lineHeight: 20,
+    fontWeight: fontWeight.medium,
   },
 });

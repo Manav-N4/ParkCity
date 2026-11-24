@@ -1,17 +1,20 @@
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   StyleSheet,
   Text,
   View,
 } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 
 import { useTheme } from '../contexts/ThemeContext';
 import { useDialog } from '../contexts/DialogContext';
 import {
   fontWeight,
+  letterSpacing,
   radius,
+  shadow,
   spacing,
   typography,
 } from '../constants/tokens';
@@ -45,6 +48,20 @@ export default function DealCard({
       }
     };
   }, []);
+
+  // Display-only: hidden when the date is missing or unparseable.
+  const validUntilLabel = useMemo(() => {
+    if (!deal.valid_until) return null;
+
+    const date = new Date(deal.valid_until);
+    if (Number.isNaN(date.getTime())) return null;
+
+    return `Valid until ${date.toLocaleDateString('en-IN', {
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    })}`;
+  }, [deal.valid_until]);
 
   const markAsCopied = () => {
     setCopied(true);
@@ -109,22 +126,37 @@ export default function DealCard({
     >
       <View style={styles.header}>
         <View style={styles.offerContainer}>
-          <Text style={[styles.offerLabel, { color: colors.textSecondary }]}>
-            EXCLUSIVE OFFER
-          </Text>
+          <View style={styles.offerLabelRow}>
+            <Ionicons
+              name="pricetag-outline"
+              size={12}
+              color={colors.goldDeep}
+            />
+            <Text style={[styles.offerLabel, { color: colors.goldDeep }]}>
+              EXCLUSIVE OFFER
+            </Text>
+          </View>
 
           <Text style={[styles.offerText, { color: colors.text }]}>
             {deal.offer_text}
           </Text>
+
+          {validUntilLabel && (
+            <Text
+              style={[styles.validUntil, { color: colors.textSecondary }]}
+            >
+              {validUntilLabel}
+            </Text>
+          )}
         </View>
 
         <View
           style={[
             styles.discountBadge,
-            { backgroundColor: colors.primary },
+            { backgroundColor: colors.champagneSoft },
           ]}
         >
-          <Text style={styles.discountText}>
+          <Text style={[styles.discountText, { color: colors.goldDeep }]}>
             {deal.discount_label}
           </Text>
         </View>
@@ -134,8 +166,8 @@ export default function DealCard({
         style={[
           styles.codeBox,
           {
-            borderColor: colors.border,
-            backgroundColor: colors.background,
+            borderColor: colors.champagne,
+            backgroundColor: colors.surfaceMuted,
           },
         ]}
       >
@@ -155,6 +187,7 @@ export default function DealCard({
         title={copied ? 'Copied!' : 'Copy Code'}
         loading={isRedeeming}
         onPress={handleCopyCode}
+        variant="outline"
       />
     </View>
   );
@@ -165,9 +198,10 @@ const styles = StyleSheet.create({
     width: '100%',
     padding: spacing.md,
     marginBottom: spacing.md,
-    borderRadius: radius.lg,
-    borderWidth: 1,
+    borderRadius: radius.xl,
+    borderWidth: StyleSheet.hairlineWidth,
     gap: spacing.md,
+    ...shadow.sm,
   },
 
   header: {
@@ -182,27 +216,38 @@ const styles = StyleSheet.create({
     gap: spacing.xs,
   },
 
+  offerLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+
   offerLabel: {
-    fontSize: 10,
+    fontSize: typography.overline,
+    lineHeight: typography.overlineLineHeight,
     fontWeight: fontWeight.bold,
-    letterSpacing: 1.1,
+    letterSpacing: letterSpacing.overline,
   },
 
   offerText: {
     fontSize: typography.body,
-    lineHeight: typography.bodyLineHeight,
+    lineHeight: 22,
     fontWeight: fontWeight.semibold,
   },
 
+  validUntil: {
+    fontSize: typography.caption,
+    lineHeight: typography.captionLineHeight,
+  },
+
   discountBadge: {
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs,
-    borderRadius: radius.sm,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: radius.pill,
   },
 
   discountText: {
-    color: '#FFFFFF',
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: fontWeight.bold,
   },
 

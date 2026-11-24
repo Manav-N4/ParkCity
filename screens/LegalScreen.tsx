@@ -1,5 +1,15 @@
 
-import { View, Text, TouchableOpacity, StyleSheet, Linking } from 'react-native'
+import { useMemo } from 'react'
+import {
+  View,
+  Text,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Linking,
+} from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
+import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTheme } from '../contexts/ThemeContext'
 import { useDialog } from '../contexts/DialogContext'
 import { API_BASE_URL } from '../lib/api'
@@ -9,11 +19,23 @@ import * as Sharing from 'expo-sharing'
 import { useNavigation } from '@react-navigation/native'
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack'
 import type { RootStackParamList } from '../App'
+import ListRow from '../components/ui/ListRow'
+import {
+  colors as lightColors,
+  fontWeight,
+  letterSpacing,
+  radius,
+  shadow,
+  spacing,
+  typography,
+} from '../constants/tokens'
 
 type Nav = NativeStackNavigationProp<RootStackParamList>
 
 export default function LegalScreen() {
   const { colors } = useTheme()
+  const styles = useMemo(() => createStyles(colors), [colors])
+  const insets = useSafeAreaInsets()
   const { showDialog } = useDialog()
   const navigation = useNavigation<Nav>()
 
@@ -88,90 +110,135 @@ export default function LegalScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Legal</Text>
-
-      <TouchableOpacity
-        style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={() => openURL('https://park-city.in/privacy')}
-        activeOpacity={0.7}
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.container,
+        { paddingTop: insets.top + spacing.sm },
+      ]}
+      showsVerticalScrollIndicator={false}
+    >
+      <Pressable
+        onPress={() => navigation.goBack()}
+        style={({ pressed }) => [styles.backButton, pressed && styles.pressed]}
+        accessibilityRole="button"
+        accessibilityLabel="Back"
+        hitSlop={6}
       >
-        <Text style={[styles.rowLabel, { color: colors.text }]}>Privacy Policy</Text>
-        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-      </TouchableOpacity>
+        <Ionicons name="arrow-back" size={20} color={colors.text} />
+      </Pressable>
 
-      <TouchableOpacity
-        style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={() => openURL('https://park-city.in/terms')}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.rowLabel, { color: colors.text }]}>Terms of Use</Text>
-        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-      </TouchableOpacity>
+      <Text style={styles.title}>Privacy & Legal</Text>
 
-      <View style={[styles.disclaimerBox, { backgroundColor: colors.surface, borderColor: colors.border }]}>
-        <Text style={[styles.disclaimerText, { color: colors.textSecondary }]}>
+      <Text style={styles.sectionLabel}>LEGAL</Text>
+      <View style={styles.card}>
+        <ListRow
+          icon="document-text-outline"
+          label="Privacy Policy"
+          subtitle="Opens in your browser"
+          onPress={() => openURL('https://park-city.in/privacy')}
+          showDivider
+        />
+        <ListRow
+          icon="reader-outline"
+          label="Terms of Use"
+          subtitle="Opens in your browser"
+          onPress={() => openURL('https://park-city.in/terms')}
+        />
+      </View>
+
+      <View style={styles.disclaimerBox}>
+        <Ionicons
+          name="information-circle-outline"
+          size={18}
+          color={colors.textSecondary}
+        />
+        <Text style={styles.disclaimerText}>
           Information provided as-is. Verify signage on-site before parking.
         </Text>
       </View>
 
-      <Text style={[styles.sectionLabel, { color: colors.textSecondary }]}>Your Data</Text>
-
-      <TouchableOpacity
-        style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={() => void downloadData()}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.rowLabel, { color: colors.text }]}>Download My Data</Text>
-        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.row, { backgroundColor: colors.surface, borderColor: colors.border }]}
-        onPress={deleteAccount}
-        activeOpacity={0.7}
-      >
-        <Text style={[styles.rowLabel, { color: '#E23744' }]}>Delete My Account</Text>
-        <Text style={[styles.chevron, { color: colors.textSecondary }]}>›</Text>
-      </TouchableOpacity>
-
-    </View>
+      <Text style={styles.sectionLabel}>YOUR DATA</Text>
+      <View style={styles.card}>
+        <ListRow
+          icon="download-outline"
+          label="Download My Data"
+          onPress={() => void downloadData()}
+          showDivider
+        />
+        <ListRow
+          icon="trash-outline"
+          label="Delete My Account"
+          onPress={deleteAccount}
+          destructive
+        />
+      </View>
+    </ScrollView>
   )
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    padding: 20,
-    paddingTop: 40,
-  },
-  sectionLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    marginTop: 24,
-    marginBottom: 8,
-    marginLeft: 4,
-  },
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  rowLabel: { fontSize: 15 },
-  chevron: { fontSize: 18 },
-  disclaimerBox: {
-    padding: 14,
-    borderRadius: 12,
-    borderWidth: 1,
-    marginBottom: 8,
-  },
-  disclaimerText: { fontSize: 13, lineHeight: 20 },
-  error: { color: '#E23744' },
-})
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    container: {
+      paddingHorizontal: spacing.lg,
+      paddingBottom: spacing.xl,
+    },
+    pressed: {
+      opacity: 0.75,
+    },
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+      ...shadow.sm,
+    },
+    title: {
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+    },
+    sectionLabel: {
+      color: colors.goldDeep,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.overline,
+      marginTop: spacing.lg,
+      marginBottom: spacing.sm,
+      marginLeft: spacing.xs,
+    },
+    card: {
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+      overflow: 'hidden',
+    },
+    disclaimerBox: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: spacing.sm,
+      marginTop: 12,
+      padding: 12,
+      borderRadius: radius.lg,
+      backgroundColor: colors.surfaceMuted,
+    },
+    disclaimerText: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: 13,
+      lineHeight: 20,
+    },
+  })

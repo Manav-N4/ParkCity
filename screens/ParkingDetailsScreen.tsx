@@ -6,18 +6,23 @@ import {
   View,
   Pressable,
   ScrollView,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import * as Location from 'expo-location';
+import { Image } from 'expo-image';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Ionicons } from '@expo/vector-icons';
+import { setStatusBarStyle } from 'expo-status-bar';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import type { RootStackParamList } from '../App';
 import VerificationBadge from '../components/VerificationBadge';
 import ToastMessage from '../components/ui/ToastMessage';
 import DealCard from '../components/DealCard';
+import ListRow from '../components/ui/ListRow';
+import PrimaryButton from '../components/ui/PrimaryButton';
 import {
   logNavigation,
   getSavedSpots,
@@ -30,13 +35,17 @@ import {
 } from '../lib/api';
 import { supabase } from '../lib/supabase';
 import { useDialog } from '../contexts/DialogContext';
+import { useTheme } from '../contexts/ThemeContext';
 import {
-  colors,
+  colors as lightColors,
   fontWeight,
+  letterSpacing,
   radius,
+  shadow,
   spacing,
   typography,
 } from '../constants/tokens';
+import { PARKING_PLACEHOLDER_URI } from '../constants/images';
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
@@ -48,12 +57,22 @@ type ToastState = {
   type: 'success' | 'error';
 } | null;
 
+const HERO_HEIGHT = 280;
+const SHEET_OVERLAP = 24;
+const CONTROL_SIZE = 42;
+
 export default function ParkingDetailsScreen({
   route,
   navigation,
 }: Props) {
   const { spot } = route.params;
   const { showDialog } = useDialog();
+  const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+
+  // Height of the sticky action bar, so scroll content can clear it.
+  const [actionBarHeight, setActionBarHeight] = useState(96);
 
   const [isSaved, setIsSaved] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -77,6 +96,17 @@ export default function ParkingDetailsScreen({
       : null;
 
   const hasValidSpotId = validSpotId !== null;
+
+  // Light status bar text over the photo hero while this screen is focused.
+  useFocusEffect(
+    useCallback(() => {
+      setStatusBarStyle('light');
+
+      return () => {
+        setStatusBarStyle('auto');
+      };
+    }, []),
+  );
 
   useFocusEffect(
     useCallback(() => {
@@ -467,344 +497,476 @@ export default function ParkingDetailsScreen({
     spot.verification_tier ??
     (spot.source === 'google_raw' ? 'google_raw' : 'unverified');
 
+  // Same conditions as before, named for readability.
+  const isParkingActionDisabled =
+    isParkingActionLoading ||
+    isSessionStatusLoading ||
+    !hasValidSpotId ||
+    (
+      activeSessionSpotId !== null &&
+      activeSessionSpotId !== validSpotId &&
+      !sessionId
+    );
+
+  const parkingActionAccessibilityLabel =
+    isSessionStatusLoading
+      ? 'Checking session...'
+      : sessionId
+        ? "I've left"
+        : activeSessionSpotId &&
+          activeSessionSpotId !== validSpotId
+          ? 'Active session elsewhere'
+          : "I've parked here";
+
+  const parkingActionTitle =
+    isParkingActionLoading
+      ? 'Please wait...'
+      : isSessionStatusLoading
+        ? 'Checking session...'
+        : sessionId
+          ? "I've left"
+          : activeSessionSpotId &&
+            activeSessionSpotId !== validSpotId
+            ? 'Active session elsewhere'
+            : "I've parked here";
+
+  const isActiveElsewhere =
+    !sessionId &&
+    activeSessionSpotId !== null &&
+    activeSessionSpotId !== validSpotId;
+
+  const addressText =
+    typeof spot.address === 'string' && spot.address.trim().length > 0
+      ? spot.address
+      : 'Parking location';
+
   return (
-    <KeyboardAvoidingView
-      style={styles.keyboardContainer}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
+    <View style={styles.screen}>
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.scrollContent}
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        style={styles.scroll}
+        contentContainerStyle={{ paddingBottom: actionBarHeight + spacing.lg }}
         showsVerticalScrollIndicator={false}
       >
-        <Pressable
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Text style={styles.backText}>← Back to parking</Text>
-        </Pressable>
+        {/* Photo hero */}
+        <View style={styles.hero}>
+          <Image
+            source={{ uri: PARKING_PLACEHOLDER_URI }}
+            style={StyleSheet.absoluteFill}
+            contentFit="cover"
+            transition={200}
+            cachePolicy="memory-disk"
+            accessible={false}
+          />
 
-        <View style={styles.card}>
-          <Text style={styles.eyebrow}>PARKING DETAILS</Text>
+          <View style={styles.heroTint} pointerEvents="none" />
 
-          <View style={styles.nameRow}>
-            <Text style={styles.name}>{spot.name}</Text>
-
-            <Pressable
-              onPress={handleToggleSaved}
-              disabled={isSaving || !hasValidSpotId}
-              style={[
-                styles.favoriteButton,
-                isSaved && styles.favoriteButtonActive,
-                (isSaving || !hasValidSpotId) &&
-                  styles.favoriteButtonDisabled,
-              ]}
-              accessibilityRole="button"
-              accessibilityState={{
-                selected: isSaved,
-                disabled: isSaving || !hasValidSpotId,
-              }}
-              accessibilityLabel={
-                !hasValidSpotId
-                  ? 'This parking spot cannot currently be saved'
-                  : isSaved
-                    ? 'Remove from saved spots'
-                    : 'Save this spot'
-              }
-            >
-              <Text
-                style={[
-                  styles.favoriteIcon,
-                  isSaved && styles.favoriteIconActive,
-                ]}
-              >
-                {isSaved ? '♥' : '♡'}
-              </Text>
-            </Pressable>
-          </View>
-
-          <VerificationBadge tier={verificationTier} />
-
-          <View style={styles.divider} />
-
-          <Text style={styles.label}>Hourly price</Text>
-          <Text style={styles.price}>
-            {spot.price_per_hour == null
-              ? 'Price unavailable'
-              : `₹${spot.price_per_hour}/hr`}
-          </Text>
-
-          {toast && (
-            <View style={styles.toastContainer}>
-              <ToastMessage
-                message={toast.message}
-                type={toast.type}
-              />
-            </View>
-          )}
+          <LinearGradient
+            colors={['rgba(31,27,20,0.35)', 'rgba(31,27,20,0)']}
+            style={[styles.heroTopScrim, { height: insets.top + 72 }]}
+            pointerEvents="none"
+          />
 
           <Pressable
-            style={[
-              styles.parkingButton,
-              sessionId && styles.checkoutButton,
-              (
-                isParkingActionLoading ||
-                isSessionStatusLoading ||
-                !hasValidSpotId ||
-                (
-                  activeSessionSpotId !== null &&
-                  activeSessionSpotId !== validSpotId &&
-                  !sessionId
-                )
-              ) && styles.actionButtonDisabled,
+            onPress={() => navigation.goBack()}
+            style={({ pressed }) => [
+              styles.heroControl,
+              styles.backControl,
+              { top: insets.top + spacing.sm },
+              pressed && styles.heroControlPressed,
             ]}
-            onPress={handleParkingAction}
-            disabled={
-              isParkingActionLoading ||
-              isSessionStatusLoading ||
-              !hasValidSpotId ||
-              (
-                activeSessionSpotId !== null &&
-                activeSessionSpotId !== validSpotId &&
-                !sessionId
-              )
-            }
             accessibilityRole="button"
+            accessibilityLabel="Back to parking"
+            hitSlop={6}
+          >
+            <Ionicons name="arrow-back" size={20} color={colors.text} />
+          </Pressable>
+
+          <Pressable
+            onPress={handleToggleSaved}
+            disabled={isSaving || !hasValidSpotId}
+            style={({ pressed }) => [
+              styles.heroControl,
+              styles.favoriteControl,
+              { top: insets.top + spacing.sm },
+              isSaved && styles.favoriteControlActive,
+              pressed && styles.heroControlPressed,
+              (isSaving || !hasValidSpotId) &&
+                styles.favoriteControlDisabled,
+            ]}
+            accessibilityRole="button"
+            accessibilityState={{
+              selected: isSaved,
+              disabled: isSaving || !hasValidSpotId,
+            }}
             accessibilityLabel={
-              isSessionStatusLoading
-                ? 'Checking session...'
-                : sessionId
-                  ? "I've left"
-                  : activeSessionSpotId &&
-                    activeSessionSpotId !== validSpotId
-                    ? 'Active session elsewhere'
-                    : "I've parked here"
+              !hasValidSpotId
+                ? 'This parking spot cannot currently be saved'
+                : isSaved
+                  ? 'Remove from saved spots'
+                  : 'Save this spot'
             }
+            hitSlop={6}
           >
-            <Text style={styles.parkingButtonText}>
-              {isParkingActionLoading
-                ? 'Please wait...'
-                : isSessionStatusLoading
-                  ? 'Checking session...'
-                  : sessionId
-                    ? "I've left"
-                    : activeSessionSpotId &&
-                      activeSessionSpotId !== validSpotId
-                      ? 'Active session elsewhere'
-                      : "I've parked here"}
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.navigateButton}
-            onPress={handleNavigate}
-            accessibilityRole="button"
-            accessibilityLabel="Get Directions"
-          >
-            <Text style={styles.navigateButtonText}>
-              Get Directions
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.claimButton}
-            onPress={handleClaim}
-            accessibilityRole="button"
-            accessibilityLabel="Claim this spot"
-          >
-            <Text style={styles.claimButtonText}>
-              Claim this spot
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.reportButton}
-            onPress={() => navigation.navigate('ReportIssue', { spot })}
-            accessibilityRole="button"
-            accessibilityLabel="Report an issue with this parking spot"
-          >
-            <Text style={styles.reportButtonText}>
-              Report an Issue
-            </Text>
+            <Ionicons
+              name={isSaved ? 'heart' : 'heart-outline'}
+              size={20}
+              color={isSaved ? colors.error : colors.textSecondary}
+            />
           </Pressable>
         </View>
 
-        {/* Story 8A: Deals & Redemption */}
-        {deals.length > 0 && dealAccessToken && validSpotId && (
-          <View style={styles.dealsSection}>
-            <Text style={styles.dealsHeading}>
-              Offers at this spot
-            </Text>
+        {/* Information sheet */}
+        <View style={styles.sheet}>
+          <VerificationBadge tier={verificationTier} />
 
-            {deals.map((deal) => (
-              <DealCard
-                key={deal.id}
-                deal={deal}
-                spotId={validSpotId}
-                accessToken={dealAccessToken}
+          <Text style={styles.name}>{spot.name}</Text>
+
+          <View style={styles.addressRow}>
+            <Ionicons
+              name="location-outline"
+              size={16}
+              color={colors.textSecondary}
+            />
+            <Text style={styles.addressText} numberOfLines={2}>
+              {addressText}
+            </Text>
+          </View>
+
+          {!isSessionStatusLoading && sessionId && (
+            <View style={[styles.statusChip, styles.statusChipParked]}>
+              <View style={styles.statusDotParked} />
+              <Text style={styles.statusTextParked}>
+                You're parked here
+              </Text>
+            </View>
+          )}
+
+          {!isSessionStatusLoading && isActiveElsewhere && (
+            <View style={[styles.statusChip, styles.statusChipElsewhere]}>
+              <Ionicons
+                name="time-outline"
+                size={13}
+                color={colors.goldDeep}
               />
-            ))}
+              <Text style={styles.statusTextElsewhere}>
+                Active session at another spot
+              </Text>
+            </View>
+          )}
+
+          {/* Pricing panel */}
+          <View style={styles.pricePanel}>
+            <View style={styles.priceText}>
+              <Text style={styles.priceLabel}>Parking rate</Text>
+
+              {spot.price_per_hour == null ? (
+                <Text style={styles.priceUnavailable}>
+                  Price unavailable
+                </Text>
+              ) : (
+                <Text style={styles.price}>
+                  ₹{spot.price_per_hour}
+                  <Text style={styles.priceUnit}> /hr</Text>
+                </Text>
+              )}
+            </View>
+
+            <View style={styles.priceIcon}>
+              <Ionicons
+                name="cash-outline"
+                size={20}
+                color={colors.primaryDeep}
+              />
+            </View>
+          </View>
+
+          {/* Actions */}
+          <View style={styles.actionsCard}>
+            <ListRow
+              icon="navigate-outline"
+              label="Get directions"
+              subtitle="Open in Google Maps"
+              onPress={handleNavigate}
+              accessibilityLabel="Get Directions"
+              showDivider
+            />
+
+            <ListRow
+              icon="ribbon-outline"
+              label="Claim this spot"
+              subtitle="Own this parking? Verify ownership"
+              onPress={handleClaim}
+              accessibilityLabel="Claim this spot"
+              showDivider
+            />
+
+            <ListRow
+              icon="flag-outline"
+              label="Report an issue"
+              subtitle="Wrong price, closed or wrong location"
+              onPress={() => navigation.navigate('ReportIssue', { spot })}
+              accessibilityLabel="Report an issue with this parking spot"
+              destructive
+            />
+          </View>
+
+          {/* Story 8A: Deals & Redemption */}
+          {deals.length > 0 && dealAccessToken && validSpotId && (
+            <View style={styles.dealsSection}>
+              <Text style={styles.dealsHeading}>
+                Offers at this spot
+              </Text>
+
+              {deals.map((deal) => (
+                <DealCard
+                  key={deal.id}
+                  deal={deal}
+                  spotId={validSpotId}
+                  accessToken={dealAccessToken}
+                />
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+
+      {/* Sticky primary action */}
+      <View
+        style={[
+          styles.actionBar,
+          { paddingBottom: Math.max(insets.bottom, 12) },
+        ]}
+        onLayout={(event) =>
+          setActionBarHeight(event.nativeEvent.layout.height)
+        }
+      >
+        {toast && (
+          <View style={styles.toastContainer}>
+            <ToastMessage
+              message={toast.message}
+              type={toast.type}
+            />
           </View>
         )}
-      </ScrollView>
-    </KeyboardAvoidingView>
+
+        <PrimaryButton
+          title={parkingActionTitle}
+          variant={sessionId ? 'destructive' : 'primary'}
+          onPress={handleParkingAction}
+          disabled={isParkingActionDisabled}
+          accessibilityLabel={parkingActionAccessibilityLabel}
+        />
+      </View>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  keyboardContainer: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    padding: spacing.lg,
-    paddingTop: spacing.xl * 2,
-    paddingBottom: spacing.xl * 2,
-  },
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: spacing.md,
-    marginBottom: spacing.lg,
-  },
-  backText: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: fontWeight.medium,
-  },
-  card: {
-    backgroundColor: colors.surface,
-    borderColor: colors.border,
-    borderWidth: 1,
-    borderRadius: radius.lg,
-    padding: spacing.lg,
-  },
-  eyebrow: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing.sm,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: spacing.sm,
-  },
-  name: {
-    flex: 1,
-    color: colors.text,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
-  favoriteButton: {
-    width: 44,
-    height: 44,
-    borderRadius: radius.md,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  favoriteButtonActive: {
-    backgroundColor: colors.favoriteBackground,
-    borderColor: colors.favoriteBorder,
-  },
-  favoriteButtonDisabled: {
-    opacity: 0.6,
-  },
-  favoriteIcon: {
-    fontSize: 27,
-    color: colors.textSecondary,
-  },
-  favoriteIconActive: {
-    color: colors.error,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: colors.border,
-    marginVertical: spacing.lg,
-  },
-  label: {
-    color: colors.textSecondary,
-    fontSize: typography.small,
-    marginTop: spacing.md,
-    marginBottom: spacing.xs,
-  },
-  price: {
-    color: colors.text,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  toastContainer: {
-    marginTop: spacing.lg,
-  },
-  parkingButton: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.xl,
-  },
-  checkoutButton: {
-    backgroundColor: colors.error,
-  },
-  actionButtonDisabled: {
-    opacity: 0.6,
-  },
-  parkingButtonText: {
-    color: colors.background,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  navigateButton: {
-    backgroundColor: colors.text,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  navigateButtonText: {
-    color: colors.background,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  claimButton: {
-    borderColor: colors.primary,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.md,
-  },
-  claimButtonText: {
-    color: colors.primary,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
-  reportButton: {
-    padding: spacing.md,
-    alignItems: 'center',
-    marginTop: spacing.sm,
-  },
-  reportButtonText: {
-    color: colors.error,
-    fontSize: typography.small,
-    fontWeight: fontWeight.semibold,
-  },
-  dealsSection: {
-    marginTop: spacing.xl,
-  },
-  dealsHeading: {
-    color: colors.text,
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-    marginBottom: spacing.md,
-  },
-});
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    scroll: {
+      flex: 1,
+    },
+
+    // Hero
+    hero: {
+      height: HERO_HEIGHT,
+      backgroundColor: colors.skeleton,
+      overflow: 'hidden',
+    },
+    heroTint: {
+      ...StyleSheet.absoluteFill,
+      backgroundColor: 'rgba(232,200,121,0.04)',
+    },
+    heroTopScrim: {
+      position: 'absolute',
+      top: 0,
+      left: 0,
+      right: 0,
+    },
+    heroControl: {
+      position: 'absolute',
+      width: CONTROL_SIZE,
+      height: CONTROL_SIZE,
+      borderRadius: CONTROL_SIZE / 2,
+      backgroundColor: colors.surface,
+      alignItems: 'center',
+      justifyContent: 'center',
+      ...shadow.sm,
+    },
+    backControl: {
+      left: spacing.md,
+    },
+    favoriteControl: {
+      right: spacing.md,
+    },
+    heroControlPressed: {
+      opacity: 0.8,
+    },
+    favoriteControlActive: {
+      backgroundColor: colors.favoriteBackground,
+      borderWidth: 1,
+      borderColor: colors.favoriteBorder,
+    },
+    favoriteControlDisabled: {
+      opacity: 0.6,
+    },
+
+    // Information sheet
+    sheet: {
+      marginTop: -SHEET_OVERLAP,
+      borderTopLeftRadius: radius.xxl,
+      borderTopRightRadius: radius.xxl,
+      backgroundColor: colors.background,
+      paddingHorizontal: spacing.lg,
+      paddingTop: spacing.lg,
+    },
+    name: {
+      marginTop: 12,
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+    },
+    addressRow: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      gap: 6,
+      marginTop: spacing.sm,
+    },
+    addressText: {
+      flex: 1,
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      lineHeight: typography.smallLineHeight,
+    },
+    statusChip: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 12,
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+      borderRadius: radius.pill,
+    },
+    statusChipParked: {
+      backgroundColor: colors.primarySoft,
+    },
+    statusDotParked: {
+      width: 7,
+      height: 7,
+      borderRadius: 4,
+      backgroundColor: colors.primary,
+    },
+    statusTextParked: {
+      color: colors.primaryDeep,
+      fontSize: typography.caption,
+      fontWeight: fontWeight.semibold,
+    },
+    statusChipElsewhere: {
+      backgroundColor: colors.champagneSoft,
+    },
+    statusTextElsewhere: {
+      color: colors.goldDeep,
+      fontSize: typography.caption,
+      fontWeight: fontWeight.semibold,
+    },
+
+    // Pricing panel
+    pricePanel: {
+      marginTop: spacing.lg,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      paddingHorizontal: spacing.md,
+      paddingVertical: 14,
+      borderRadius: radius.xl,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      ...shadow.sm,
+    },
+    priceText: {
+      flex: 1,
+      minWidth: 0,
+      gap: 2,
+    },
+    priceLabel: {
+      color: colors.textSecondary,
+      fontSize: typography.caption,
+      lineHeight: typography.captionLineHeight,
+      fontWeight: fontWeight.medium,
+    },
+    price: {
+      color: colors.primaryDeep,
+      fontSize: 24,
+      lineHeight: 30,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.snug,
+    },
+    priceUnit: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      fontWeight: fontWeight.regular,
+    },
+    priceUnavailable: {
+      color: colors.textSecondary,
+      fontSize: 17,
+      lineHeight: 24,
+      fontWeight: fontWeight.semibold,
+    },
+    priceIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    // Actions
+    actionsCard: {
+      marginTop: spacing.md,
+      borderRadius: radius.xl,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      overflow: 'hidden',
+    },
+
+    // Offers
+    dealsSection: {
+      marginTop: spacing.xl,
+    },
+    dealsHeading: {
+      color: colors.text,
+      fontSize: typography.headline,
+      lineHeight: typography.headlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.snug,
+      marginBottom: spacing.md,
+    },
+
+    // Sticky action bar
+    actionBar: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      paddingHorizontal: spacing.md,
+      paddingTop: 12,
+      backgroundColor: colors.surface,
+      borderTopWidth: StyleSheet.hairlineWidth,
+      borderTopColor: colors.border,
+      ...shadow.md,
+      shadowOffset: { width: 0, height: -2 },
+    },
+    toastContainer: {
+      marginBottom: spacing.sm,
+    },
+  });

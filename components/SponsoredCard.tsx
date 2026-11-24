@@ -1,5 +1,13 @@
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native'
+import { View, Text, Pressable, StyleSheet } from 'react-native'
+import { Ionicons } from '@expo/vector-icons'
 import { useTheme } from '../contexts/ThemeContext'
+import {
+  fontWeight,
+  letterSpacing,
+  radius,
+  shadow,
+  spacing,
+} from '../constants/tokens'
 
 type SponsoredSpot = {
   id: string
@@ -18,55 +26,119 @@ export default function SponsoredCard({ spot, onPress }: Props) {
   const { colors } = useTheme()
 
   return (
-    <TouchableOpacity
-      style={[styles.card, { borderColor: colors.primary, backgroundColor: colors.surface }]}
+    <Pressable
       onPress={onPress}
-      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityLabel={`Sponsored parking: ${spot.name}`}
+      style={({ pressed }) => [
+        styles.card,
+        {
+          backgroundColor: colors.surface,
+          borderColor: colors.champagne,
+          opacity: pressed ? 0.8 : 1,
+        },
+      ]}
     >
-      <View style={styles.sponsoredBadge}>
-        <Text style={[styles.sponsoredText, { color: colors.textSecondary }]}>Sponsored</Text>
+      <View style={styles.content}>
+        <View
+          style={[
+            styles.sponsoredChip,
+            { backgroundColor: colors.champagneSoft },
+          ]}
+        >
+          <Ionicons
+            name="megaphone-outline"
+            size={11}
+            color={colors.goldDeep}
+          />
+          <Text style={[styles.sponsoredText, { color: colors.goldDeep }]}>
+            Sponsored
+          </Text>
+        </View>
+
+        <Text
+          style={[styles.name, { color: colors.text }]}
+          numberOfLines={2}
+        >
+          {spot.name}
+        </Text>
+
+        {spot.address && (
+          <Text
+            style={[styles.address, { color: colors.textSecondary }]}
+            numberOfLines={1}
+          >
+            {spot.address}
+          </Text>
+        )}
+
+        {spot.price_per_hour != null && (
+          <Text style={[styles.price, { color: colors.primaryDeep }]}>
+            ₹{spot.price_per_hour}
+            <Text style={[styles.priceUnit, { color: colors.textSecondary }]}>
+              {' '}/hr
+            </Text>
+          </Text>
+        )}
       </View>
-      <Text style={[styles.name, { color: colors.text }]}>{spot.name}</Text>
-      {spot.address && (
-        <Text style={[styles.address, { color: colors.textSecondary }]}>{spot.address}</Text>
-      )}
-      {spot.price_per_hour != null && (
-        <Text style={[styles.price, { color: colors.primary }]}>₹{spot.price_per_hour}/hr</Text>
-      )}
-    </TouchableOpacity>
+
+      <Ionicons
+        name="chevron-forward"
+        size={20}
+        color={colors.textSecondary}
+      />
+    </Pressable>
   )
 }
 
 const styles = StyleSheet.create({
   card: {
-    borderWidth: 1.5,
-    borderRadius: 14,
-    padding: 16,
-    marginHorizontal: 16,
-    marginBottom: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.md,
+    borderWidth: 1,
+    borderRadius: radius.xl,
+    padding: spacing.md,
+    marginBottom: spacing.lg,
+    ...shadow.sm,
   },
-  sponsoredBadge: {
+  content: {
+    flex: 1,
+    minWidth: 0,
+  },
+  sponsoredChip: {
     alignSelf: 'flex-start',
-    marginBottom: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: radius.pill,
+    marginBottom: spacing.sm,
   },
   sponsoredText: {
-    fontSize: 10,
-    fontWeight: '600',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontSize: 11,
+    fontWeight: fontWeight.semibold,
+    letterSpacing: letterSpacing.wide,
   },
   name: {
-    fontSize: 16,
-    fontWeight: '700',
-    marginBottom: 4,
+    fontSize: 17,
+    lineHeight: 22,
+    fontWeight: fontWeight.bold,
+    letterSpacing: letterSpacing.snug,
   },
   address: {
     fontSize: 13,
-    marginBottom: 4,
+    lineHeight: 18,
+    marginTop: 2,
   },
   price: {
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 16,
+    fontWeight: fontWeight.bold,
+    marginTop: spacing.sm,
+  },
+  priceUnit: {
+    fontSize: 13,
+    fontWeight: fontWeight.regular,
   },
 })
-

@@ -1,9 +1,13 @@
 
-import { View, StyleSheet } from 'react-native';
+import { View, StyleSheet, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import ThemedText from './ThemedText';
 import { useTheme } from '../../contexts/ThemeContext';
-import { spacing } from '../../constants/tokens';
+import {
+  fontWeight,
+  letterSpacing,
+  spacing,
+  typography,
+} from '../../constants/tokens';
 
 type Props = {
   icon?: keyof typeof Ionicons.glyphMap;
@@ -23,26 +27,26 @@ export default function EmptyState({
       <View
         style={[
           styles.iconContainer,
-          { backgroundColor: colors.border },
+          {
+            backgroundColor: colors.champagneSoft,
+            borderColor: colors.champagne,
+          },
         ]}
       >
         <Ionicons
           name={icon}
-          size={36}
-          color={colors.textSecondary}
+          size={30}
+          color={colors.goldDeep}
         />
       </View>
 
-      <ThemedText variant="heading" style={styles.heading}>
+      <Text style={[styles.heading, { color: colors.text }]}>
         {heading}
-      </ThemedText>
+      </Text>
 
-      <ThemedText
-        variant="body"
-        style={[styles.subtext, { color: colors.textSecondary }]}
-      >
+      <Text style={[styles.subtext, { color: colors.textSecondary }]}>
         {subtext}
-      </ThemedText>
+      </Text>
     </View>
   );
 }
@@ -51,20 +55,30 @@ const styles = StyleSheet.create({
   container: {
     alignItems: 'center',
     justifyContent: 'center',
-    padding: spacing.xl,
-    gap: spacing.md,
+    paddingHorizontal: spacing.xl,
+    paddingVertical: spacing.lg,
   },
   iconContainer: {
-    width: 76,
-    height: 76,
-    borderRadius: 38,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: StyleSheet.hairlineWidth,
     alignItems: 'center',
     justifyContent: 'center',
+    marginBottom: spacing.md,
   },
   heading: {
     textAlign: 'center',
+    fontSize: typography.headline,
+    lineHeight: typography.headlineLineHeight,
+    fontWeight: fontWeight.bold,
+    letterSpacing: letterSpacing.snug,
   },
   subtext: {
+    marginTop: spacing.xs + 2,
+    maxWidth: 300,
     textAlign: 'center',
+    fontSize: typography.small,
+    lineHeight: 21,
   },
 });

@@ -1,10 +1,7 @@
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
-  ActivityIndicator,
   Image,
-  KeyboardAvoidingView,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,20 +10,32 @@ import {
   View,
 } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 
 import type { RootStackParamList } from '../App';
 import { useTheme } from '../contexts/ThemeContext';
 import { useDialog } from '../contexts/DialogContext';
 import PrimaryButton from '../components/ui/PrimaryButton';
+import OptionCard from '../components/ui/OptionCard';
+import {
+  isValidPrice,
+  normalizePrice,
+  sanitizePrice,
+} from '../lib/formValidation';
+import { useKeyboardAwareScroll } from '../hooks/useKeyboardAwareScroll';
 import { supabase } from '../lib/supabase';
 import {
   submitReport,
   type ReportIssueType,
 } from '../lib/api';
 import {
+  colors as lightColors,
   fontWeight,
+  letterSpacing,
   radius,
+  shadow,
   spacing,
   typography,
 } from '../constants/tokens';
@@ -40,6 +49,8 @@ type ReportPhoto = {
   uri: string;
   mimeType: string | null;
 };
+
+type IoniconName = keyof typeof Ionicons.glyphMap;
 
 const ISSUE_TYPES: {
   value: ReportIssueType;
@@ -73,13 +84,28 @@ const ISSUE_TYPES: {
   },
 ];
 
+// Display-only icons for each existing issue type.
+const ISSUE_ICONS: Record<ReportIssueType, IoniconName> = {
+  wrong_price: 'pricetag-outline',
+  permanently_closed: 'close-circle-outline',
+  wrong_location: 'location-outline',
+  unsafe: 'warning-outline',
+  other: 'ellipsis-horizontal-circle-outline',
+};
+
 export default function ReportIssueScreen({
   route,
   navigation,
 }: Props) {
   const { spot } = route.params;
   const { colors } = useTheme();
+  const styles = useMemo(() => createStyles(colors), [colors]);
+  const insets = useSafeAreaInsets();
+  const keyboard = useKeyboardAwareScroll();
   const { showDialog } = useDialog();
+
+  // Display-only focus state for the price input border.
+  const [isPriceFocused, setIsPriceFocused] = useState(false);
 
   const [issueType, setIssueType] = useState<ReportIssueType | null>(null);
   const [reportedPrice, setReportedPrice] = useState('');
@@ -208,15 +234,13 @@ export default function ReportIssueScreen({
     }
 
     if (issueType === 'wrong_price') {
-      if (
-        reportedPrice.trim() === '' ||
-        !Number.isFinite(Number(reportedPrice)) ||
-        Number(reportedPrice) < 0
-      ) {
+      // Same rule as Claim Spot: 0–9999, at most 2 decimals, no trailing ".".
+      if (!isValidPrice(reportedPrice)) {
         showDialog({
           type: 'warning',
           title: 'Invalid price',
-          message: 'Enter the correct hourly parking price.',
+          message:
+            'Enter the correct hourly parking price, between ₹0 and ₹9999 (up to 2 decimals).',
         });
         return;
       }
@@ -256,7 +280,7 @@ export default function ReportIssueScreen({
           issueType === 'wrong_price' ? 'price_per_hour' : null,
         reported_value:
           issueType === 'wrong_price'
-            ? reportedPrice.trim()
+            ? normalizePrice(reportedPrice)
             : null,
         ...(photoPath ? { photo_url: photoPath } : {}),
       });
@@ -286,168 +310,142 @@ export default function ReportIssueScreen({
     }
   };
 
+  const hasAddress =
+    typeof spot.address === 'string' && spot.address.trim().length > 0;
+
   return (
-    <KeyboardAvoidingView
-      style={[
-        styles.container,
-        { backgroundColor: colors.background },
-      ]}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-    >
+    <View style={styles.container}>
       <ScrollView
-        contentContainerStyle={styles.content}
+        ref={keyboard.scrollRef}
+        onScroll={keyboard.handleScroll}
+        scrollEventThrottle={16}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: insets.top + spacing.sm,
+            paddingBottom:
+              Math.max(insets.bottom, spacing.md) +
+              spacing.xl * 2 +
+              keyboard.keyboardHeight,
+          },
+        ]}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <Pressable
           onPress={() => navigation.goBack()}
           disabled={loading}
-          style={styles.backButton}
+          style={({ pressed }) => [
+            styles.backButton,
+            pressed && styles.pressed,
+            loading && styles.disabled,
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel="Back to parking"
+          hitSlop={6}
         >
-          <Text style={[styles.backText, { color: colors.text }]}>
-            ← Back to parking
-          </Text>
+          <Ionicons name="arrow-back" size={20} color={colors.text} />
         </Pressable>
 
-        <Text style={[styles.heading, { color: colors.text }]}>
-          Report an Issue
-        </Text>
+        <Text style={styles.eyebrow}>REPORT</Text>
 
-        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+        <Text style={styles.heading}>Report an Issue</Text>
+
+        <Text style={styles.subtitle}>
           Help us keep parking information accurate.
         </Text>
 
-        <View
-          style={[
-            styles.spotCard,
-            {
-              backgroundColor: colors.surface,
-              borderColor: colors.border,
-            },
-          ]}
-        >
-          <Text style={[styles.spotLabel, { color: colors.textSecondary }]}>
-            PARKING SPOT
-          </Text>
+        <View style={styles.spotCard}>
+          <View style={styles.spotIcon}>
+            <Ionicons name="car-outline" size={18} color={colors.goldDeep} />
+          </View>
 
-          <Text style={[styles.spotName, { color: colors.text }]}>
-            {spot.name}
-          </Text>
+          <View style={styles.spotText}>
+            <Text style={styles.spotLabel}>PARKING SPOT</Text>
+
+            <Text style={styles.spotName} numberOfLines={2}>
+              {spot.name}
+            </Text>
+
+            {hasAddress && (
+              <Text style={styles.spotAddress} numberOfLines={1}>
+                {spot.address}
+              </Text>
+            )}
+          </View>
         </View>
 
-        <Text style={[styles.sectionTitle, { color: colors.text }]}>
-          What is the issue?
-        </Text>
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>What is the issue?</Text>
+          <Text style={styles.requiredTag}>Required</Text>
+        </View>
 
         <View style={styles.issueList}>
-          {ISSUE_TYPES.map((item) => {
-            const selected = issueType === item.value;
-
-            return (
-              <Pressable
-                key={item.value}
-                accessibilityRole="radio"
-                accessibilityState={{ checked: selected }}
-                disabled={loading}
-                onPress={() => setIssueType(item.value)}
-                style={[
-                  styles.issueOption,
-                  {
-                    backgroundColor: colors.surface,
-                    borderColor: selected
-                      ? colors.primary
-                      : colors.border,
-                    borderWidth: selected ? 2 : 1,
-                  },
-                ]}
-              >
-                <View style={styles.issueOptionContent}>
-                  <Text
-                    style={[
-                      styles.issueLabel,
-                      { color: colors.text },
-                    ]}
-                  >
-                    {item.label}
-                  </Text>
-
-                  <Text
-                    style={[
-                      styles.issueDescription,
-                      { color: colors.textSecondary },
-                    ]}
-                  >
-                    {item.description}
-                  </Text>
-                </View>
-
-                <View
-                  style={[
-                    styles.radioOuter,
-                    {
-                      borderColor: selected
-                        ? colors.primary
-                        : colors.textSecondary,
-                    },
-                  ]}
-                >
-                  {selected && (
-                    <View
-                      style={[
-                        styles.radioInner,
-                        { backgroundColor: colors.primary },
-                      ]}
-                    />
-                  )}
-                </View>
-              </Pressable>
-            );
-          })}
+          {ISSUE_TYPES.map((item) => (
+            <OptionCard
+              key={item.value}
+              icon={ISSUE_ICONS[item.value]}
+              title={item.label}
+              description={item.description}
+              selected={issueType === item.value}
+              disabled={loading}
+              onPress={() => setIssueType(item.value)}
+              accessibilityLabel={`${item.label}. ${item.description}`}
+            />
+          ))}
         </View>
 
         {issueType === 'wrong_price' && (
-          <View style={styles.priceSection}>
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>
-              What is the correct price?
-            </Text>
-
-            <View style={styles.priceInputWrapper}>
-              <Text style={[styles.currencySymbol, { color: colors.text }]}>
-                ₹
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>
+                What is the correct price?
               </Text>
+              <Text style={styles.requiredTag}>Required</Text>
+            </View>
+
+            <View
+              style={[
+                styles.priceInputRow,
+                isPriceFocused && styles.inputFocused,
+              ]}
+            >
+              <Text style={styles.currencySymbol}>₹</Text>
 
               <TextInput
                 value={reportedPrice}
-                onChangeText={setReportedPrice}
+                onChangeText={(text) => setReportedPrice(sanitizePrice(text))}
                 placeholder="Enter price per hour"
                 placeholderTextColor={colors.textSecondary}
                 keyboardType="decimal-pad"
                 editable={!loading}
-                style={[
-                  styles.priceInput,
-                  {
-                    backgroundColor: colors.surface,
-                    color: colors.text,
-                    borderColor: colors.border,
-                  },
-                ]}
+                onFocus={() => {
+                  setIsPriceFocused(true);
+                  keyboard.revealOnFocus();
+                }}
+                onBlur={() => setIsPriceFocused(false)}
+                style={styles.priceInput}
+                accessibilityLabel="Correct price per hour, in rupees"
               />
+
+              <Text style={styles.priceSuffix}>/hr</Text>
             </View>
 
-            <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+            <Text style={styles.helperText}>
               Enter the correct parking price per hour.
             </Text>
           </View>
         )}
 
-        <View style={styles.photoSection}>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>
             Add a photo
-            <Text style={[styles.optionalText, { color: colors.textSecondary }]}>
+            <Text style={styles.optionalText}>
               {' '}(Optional)
             </Text>
           </Text>
 
-          <Text style={[styles.helperText, { color: colors.textSecondary }]}>
+          <Text style={styles.helperText}>
             A photo can help us verify the reported issue.
           </Text>
 
@@ -461,11 +459,19 @@ export default function ReportIssueScreen({
               <Pressable
                 onPress={() => setPhoto(null)}
                 disabled={loading}
-                style={[
+                style={({ pressed }) => [
                   styles.removePhotoButton,
-                  { backgroundColor: colors.error },
+                  pressed && styles.pressed,
+                  loading && styles.disabled,
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel="Remove photo"
               >
+                <Ionicons
+                  name="trash-outline"
+                  size={15}
+                  color={colors.errorText}
+                />
                 <Text style={styles.removePhotoText}>
                   Remove photo
                 </Text>
@@ -476,31 +482,43 @@ export default function ReportIssueScreen({
               <Pressable
                 onPress={() => selectPhoto('camera')}
                 disabled={loading}
-                style={[
-                  styles.photoButton,
-                  {
-                    borderColor: colors.primary,
-                    backgroundColor: colors.surface,
-                  },
+                style={({ pressed }) => [
+                  styles.photoTile,
+                  pressed && styles.photoTilePressed,
+                  loading && styles.disabled,
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel="Take a photo"
               >
-                <Text style={[styles.photoButtonText, { color: colors.primary }]}>
-                  Take a photo
-                </Text>
+                <View style={styles.photoTileIcon}>
+                  <Ionicons
+                    name="camera-outline"
+                    size={20}
+                    color={colors.primaryDeep}
+                  />
+                </View>
+                <Text style={styles.photoTileText}>Take a photo</Text>
               </Pressable>
 
               <Pressable
                 onPress={() => selectPhoto('gallery')}
                 disabled={loading}
-                style={[
-                  styles.photoButton,
-                  {
-                    borderColor: colors.border,
-                    backgroundColor: colors.surface,
-                  },
+                style={({ pressed }) => [
+                  styles.photoTile,
+                  pressed && styles.photoTilePressed,
+                  loading && styles.disabled,
                 ]}
+                accessibilityRole="button"
+                accessibilityLabel="Choose from gallery"
               >
-                <Text style={[styles.photoButtonText, { color: colors.text }]}>
+                <View style={styles.photoTileIcon}>
+                  <Ionicons
+                    name="images-outline"
+                    size={20}
+                    color={colors.primaryDeep}
+                  />
+                </View>
+                <Text style={styles.photoTileText}>
                   Choose from gallery
                 </Text>
               </Pressable>
@@ -518,219 +536,289 @@ export default function ReportIssueScreen({
         </View>
 
         {loading && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={colors.primary} />
-            <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-              Submitting your report...
-            </Text>
-          </View>
+          <Text style={styles.loadingText}>
+            Submitting your report...
+          </Text>
         )}
       </ScrollView>
-    </KeyboardAvoidingView>
+    </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
+const createStyles = (colors: typeof lightColors) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
 
-  content: {
-    padding: spacing.lg,
-    paddingTop: spacing.xl * 1.5,
-    paddingBottom: spacing.xl * 2,
-  },
+    content: {
+      paddingHorizontal: spacing.lg,
+    },
 
-  backButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.md,
-  },
+    backButton: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.surface,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: spacing.md,
+      ...shadow.sm,
+    },
 
-  backText: {
-    fontSize: typography.body,
-    fontWeight: fontWeight.medium,
-  },
+    pressed: {
+      opacity: 0.75,
+    },
 
-  heading: {
-    fontSize: typography.heading,
-    fontWeight: fontWeight.bold,
-  },
+    disabled: {
+      opacity: 0.5,
+    },
 
-  subtitle: {
-    fontSize: typography.body,
-    marginTop: spacing.xs,
-    lineHeight: typography.bodyLineHeight,
-  },
+    eyebrow: {
+      color: colors.goldDeep,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.overline,
+      marginBottom: spacing.xs,
+    },
 
-  spotCard: {
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    marginTop: spacing.lg,
-    marginBottom: spacing.xl,
-  },
+    heading: {
+      color: colors.text,
+      fontSize: typography.title,
+      lineHeight: typography.titleLineHeight,
+      fontWeight: fontWeight.bold,
+      letterSpacing: letterSpacing.tight,
+    },
 
-  spotLabel: {
-    fontSize: 10,
-    fontWeight: fontWeight.bold,
-    letterSpacing: 1,
-    marginBottom: spacing.xs,
-  },
+    subtitle: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      lineHeight: 21,
+      marginTop: spacing.xs,
+    },
 
-  spotName: {
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
+    // Spot card
+    spotCard: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 12,
+      padding: 14,
+      marginTop: spacing.lg,
+      marginBottom: spacing.lg,
+      borderRadius: radius.xl,
+      borderWidth: StyleSheet.hairlineWidth,
+      borderColor: colors.border,
+      backgroundColor: colors.surface,
+    },
 
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: fontWeight.semibold,
-    marginBottom: spacing.md,
-  },
+    spotIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 19,
+      backgroundColor: colors.champagneSoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  issueList: {
-    gap: spacing.sm,
-  },
+    spotText: {
+      flex: 1,
+      minWidth: 0,
+    },
 
-  issueOption: {
-    borderRadius: radius.md,
-    padding: spacing.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.md,
-  },
+    spotLabel: {
+      color: colors.textSecondary,
+      fontSize: typography.overline,
+      lineHeight: typography.overlineLineHeight,
+      fontWeight: fontWeight.semibold,
+      letterSpacing: letterSpacing.overline,
+      marginBottom: 3,
+    },
 
-  issueOptionContent: {
-    flex: 1,
-  },
+    spotName: {
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 21,
+      fontWeight: fontWeight.bold,
+    },
 
-  issueLabel: {
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
+    spotAddress: {
+      color: colors.textSecondary,
+      fontSize: typography.caption + 1,
+      lineHeight: 18,
+      marginTop: 2,
+    },
 
-  issueDescription: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: spacing.xs,
-  },
+    // Sections
+    section: {
+      marginTop: spacing.lg,
+    },
 
-  radioOuter: {
-    width: 21,
-    height: 21,
-    borderRadius: 11,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    sectionHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: spacing.sm,
+      marginBottom: 12,
+    },
 
-  radioInner: {
-    width: 11,
-    height: 11,
-    borderRadius: 6,
-  },
+    sectionTitle: {
+      flexShrink: 1,
+      color: colors.text,
+      fontSize: 16,
+      lineHeight: 22,
+      fontWeight: fontWeight.bold,
+    },
 
-  priceSection: {
-    marginTop: spacing.xl,
-  },
+    requiredTag: {
+      color: colors.goldDeep,
+      fontSize: typography.caption,
+      fontWeight: fontWeight.semibold,
+      paddingHorizontal: 8,
+      paddingVertical: 2,
+      borderRadius: radius.pill,
+      backgroundColor: colors.champagneSoft,
+      overflow: 'hidden',
+    },
 
-  priceInputWrapper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+    optionalText: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      fontWeight: fontWeight.regular,
+    },
 
-  currencySymbol: {
-    position: 'absolute',
-    left: spacing.md,
-    zIndex: 1,
-    fontSize: typography.body,
-    fontWeight: fontWeight.semibold,
-  },
+    issueList: {
+      gap: 10,
+    },
 
-  priceInput: {
-    flex: 1,
-    minHeight: 50,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    paddingLeft: spacing.xl * 1.5,
-    paddingRight: spacing.md,
-    fontSize: typography.body,
-  },
+    // Price input
+    priceInputRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: spacing.sm,
+      minHeight: 52,
+      paddingHorizontal: spacing.md,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderColor: colors.textSecondary,
+      backgroundColor: colors.surface,
+    },
 
-  helperText: {
-    fontSize: 12,
-    lineHeight: 18,
-    marginTop: spacing.xs,
-  },
+    inputFocused: {
+      borderColor: colors.primary,
+      borderWidth: 1.5,
+    },
 
-  optionalText: {
-    fontSize: typography.small,
-    fontWeight: fontWeight.regular,
-  },
+    currencySymbol: {
+      color: colors.text,
+      fontSize: typography.body,
+      fontWeight: fontWeight.semibold,
+    },
 
-  photoSection: {
-    marginTop: spacing.xl,
-  },
+    priceInput: {
+      flex: 1,
+      paddingVertical: 12,
+      color: colors.text,
+      fontSize: typography.body,
+    },
 
-  photoActions: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
+    priceSuffix: {
+      color: colors.textSecondary,
+      fontSize: typography.small,
+      fontWeight: fontWeight.medium,
+    },
 
-  photoButton: {
-    flex: 1,
-    minWidth: 130,
-    borderWidth: 1,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    alignItems: 'center',
-  },
+    helperText: {
+      color: colors.textSecondary,
+      fontSize: typography.caption + 0.5,
+      lineHeight: 18,
+      marginTop: spacing.xs,
+    },
 
-  photoButtonText: {
-    fontSize: 13,
-    fontWeight: fontWeight.semibold,
-  },
+    // Photo
+    photoActions: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+      marginTop: 12,
+    },
 
-  previewContainer: {
-    marginTop: spacing.md,
-    gap: spacing.sm,
-  },
+    photoTile: {
+      flex: 1,
+      minWidth: 130,
+      alignItems: 'center',
+      gap: spacing.sm,
+      paddingVertical: spacing.md,
+      paddingHorizontal: spacing.sm,
+      borderRadius: radius.lg,
+      borderWidth: 1,
+      borderStyle: 'dashed',
+      borderColor: colors.borderStrong,
+      backgroundColor: colors.surface,
+    },
 
-  previewImage: {
-    width: '100%',
-    height: 190,
-    borderRadius: radius.md,
-  },
+    photoTilePressed: {
+      backgroundColor: colors.surfaceMuted,
+    },
 
-  removePhotoButton: {
-    alignSelf: 'flex-start',
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderRadius: radius.md,
-  },
+    photoTileIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 20,
+      backgroundColor: colors.primarySoft,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  removePhotoText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: fontWeight.semibold,
-  },
+    photoTileText: {
+      color: colors.text,
+      fontSize: 13,
+      fontWeight: fontWeight.semibold,
+      textAlign: 'center',
+    },
 
-  submitContainer: {
-    marginTop: spacing.xl,
-  },
+    previewContainer: {
+      marginTop: 12,
+      gap: 10,
+    },
 
-  loadingRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: spacing.sm,
-    marginTop: spacing.md,
-  },
+    previewImage: {
+      width: '100%',
+      height: 190,
+      borderRadius: radius.lg,
+      backgroundColor: colors.skeleton,
+    },
 
-  loadingText: {
-    fontSize: 13,
-  },
-});
+    removePhotoButton: {
+      alignSelf: 'flex-start',
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: radius.pill,
+      borderWidth: 1,
+      borderColor: colors.errorText,
+      backgroundColor: colors.surface,
+    },
+
+    removePhotoText: {
+      color: colors.errorText,
+      fontSize: 13,
+      fontWeight: fontWeight.semibold,
+    },
+
+    submitContainer: {
+      marginTop: spacing.xl,
+    },
+
+    loadingText: {
+      color: colors.textSecondary,
+      fontSize: typography.caption + 1,
+      textAlign: 'center',
+      marginTop: 12,
+    },
+  });
