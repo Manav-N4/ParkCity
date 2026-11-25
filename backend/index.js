@@ -88,6 +88,12 @@ app.use('/razorpay-webhook', webhookRouter)
 const accountRouter = require('./routes/account')
 app.use('/account', requireAuth, accountRouter)
 
+const userRouter = require('./routes/user')
+app.use('/user', requireAuth, userRouter)
+
+const spotPhotoRouter = require('./routes/spot-photo')
+app.use('/spot-photo', requireAuth, spotPhotoRouter)
+
 app.get('/health', (req, res) => {
     res.json({ status: 'ok' })
 })

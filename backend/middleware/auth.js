@@ -17,7 +17,11 @@ async function requireAuth(req, res, next) {
       audience: 'authenticated',
     })
 
-    req.user = { id: payload.sub }
+    req.user = {
+      id: payload.sub,
+      email: payload.email ?? null,
+      user_metadata: payload.user_metadata ?? {},
+    }
     next()
   } catch (error) {
     console.error('auth middleware error:', error.message)

@@ -20,6 +20,7 @@ router.delete('/delete', async (req, res) => {
     await supabase.from('satisfaction_ratings').delete().eq('user_id', user_id)
     await supabase.from('parking_sessions').delete().eq('user_id', user_id)
     await supabase.from('saved_spots').delete().eq('user_id', user_id)
+    await supabase.from('vehicles').delete().eq('user_id', user_id)
     await supabase.from('profiles').delete().eq('id', user_id)
 
     // delete auth user — requires service role key
@@ -37,11 +38,12 @@ router.get('/export', async (req, res) => {
   try {
     const user_id = req.user.id
 
-    const [profile, savedSpots, sessions, ratings] = await Promise.all([
+    const [profile, savedSpots, sessions, ratings, vehicles] = await Promise.all([
       supabase.from('profiles').select('*').eq('id', user_id).single(),
       supabase.from('saved_spots').select('*').eq('user_id', user_id),
       supabase.from('parking_sessions').select('*').eq('user_id', user_id),
       supabase.from('satisfaction_ratings').select('*').eq('user_id', user_id),
+      supabase.from('vehicles').select('id, vehicle_number, is_primary, created_at').eq('user_id', user_id),
     ])
 
     return res.json({
@@ -49,6 +51,7 @@ router.get('/export', async (req, res) => {
       saved_spots: savedSpots.data ?? [],
       parking_sessions: sessions.data ?? [],
       satisfaction_ratings: ratings.data ?? [],
+      vehicles: vehicles.data ?? [],
     })
   } catch (error) {
     console.error('data export error:', error)

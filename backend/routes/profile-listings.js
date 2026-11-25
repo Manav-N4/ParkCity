@@ -1,6 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
+const { withPhotoLookup } = require('../lib/spotPhotos')
 
 router.get('/listings', async (req, res) => {
   try {
@@ -55,7 +56,7 @@ router.get('/listings', async (req, res) => {
     }
 
     const result = (spots || []).map((spot) => ({
-      ...spot,
+      ...withPhotoLookup(spot),
       ownership_status: statusMap[spot.id] ?? 'pending',
       verification_tier: verificationMap[spot.id]?.source ?? 'unverified',
     }))

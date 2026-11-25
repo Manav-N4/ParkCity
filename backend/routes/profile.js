@@ -4,11 +4,9 @@ const supabase = require('../supabase')
 
 router.post('/upsert', async (req, res) => {
   try {
-    const { user_id, name, email } = req.body
-
-    if (!user_id) {
-      return res.status(400).json({ error: 'user_id is required' })
-    }
+    // Identity comes from the verified token; any body user_id is ignored.
+    const user_id = req.user.id
+    const { name, email } = req.body ?? {}
 
     const { error } = await supabase
       .from('profiles')
@@ -29,6 +27,11 @@ router.post('/upsert', async (req, res) => {
 router.get('/:user_id', async (req, res) => {
   try {
     const { user_id } = req.params
+
+    // Users may only read their own profile.
+    if (user_id !== req.user.id) {
+      return res.status(403).json({ error: 'Forbidden' })
+    }
 
     const { data, error } = await supabase
       .from('profiles')
