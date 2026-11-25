@@ -1,6 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
+const { withPhotoLookup } = require('../lib/spotPhotos')
 
 const GEOFENCE_RADIUS_METERS = 500
 
@@ -137,7 +138,7 @@ router.get('/history', async (req, res) => {
 
     const { data, error } = await supabase
       .from('parking_sessions')
-      .select('*, parking_spots(name, address)')
+      .select('*, parking_spots(id, name, address, google_place_id)')
       .eq('user_id', user_id)
       .order('checked_in_at', { ascending: false })
 
@@ -146,7 +147,14 @@ router.get('/history', async (req, res) => {
       throw new Error('Something went wrong')
     }
 
-    return res.json(data || [])
+    const history = (data || []).map((session) => ({
+      ...session,
+      parking_spots: session.parking_spots
+        ? withPhotoLookup(session.parking_spots)
+        : session.parking_spots,
+    }))
+
+    return res.json(history)
   } catch (error) {
     console.error('sessions history error:', error)
     return res.status(500).json({ error: error.message })

@@ -2,6 +2,7 @@ const express = require('express')
 const router = express.Router()
 const { encode } = require('geohash-kit')
 const supabase = require('../supabase')
+const { withPhotoLookup } = require('../lib/spotPhotos')
 
 async function mergePrices(spots) {
   if (!spots || spots.length === 0) return []
@@ -274,7 +275,7 @@ router.post('/', async (req, res) => {
       const now = new Date().toISOString()
       const { data: sponsored } = await supabase
         .from('sponsored_spots')
-        .select('spot_id, parking_spots(id, name, address, price_per_hour, source)')
+        .select('spot_id, parking_spots(id, name, address, price_per_hour, source, google_place_id)')
         .eq('monthly_fee_paid', true)
         .lte('active_from', now)
         .gte('active_until', now)
@@ -282,7 +283,10 @@ router.post('/', async (req, res) => {
 
       const sponsoredSpot = sponsored?.parking_spots ?? null
 
-      return res.json({ spots: mergedCachedSpots, sponsored: sponsoredSpot })
+      return res.json({
+        spots: mergedCachedSpots.map(withPhotoLookup),
+        sponsored: withPhotoLookup(sponsoredSpot),
+      })
     }
 
     const API_KEY = process.env.GOOGLE_PLACES_API_KEY
@@ -360,7 +364,7 @@ await supabase.from('cached_parking_spots').upsert({
 const now = new Date().toISOString()
 const { data: sponsored } = await supabase
   .from('sponsored_spots')
-  .select('spot_id, parking_spots(id, name, address, price_per_hour, source)')
+  .select('spot_id, parking_spots(id, name, address, price_per_hour, source, google_place_id)')
   .eq('monthly_fee_paid', true)
   .lte('active_from', now)
   .gte('active_until', now)
@@ -368,7 +372,10 @@ const { data: sponsored } = await supabase
 
 const sponsoredSpot = sponsored?.parking_spots ?? null
 
-return res.json({ spots: spotsWithIds, sponsored: sponsoredSpot })
+return res.json({
+  spots: spotsWithIds.map(withPhotoLookup),
+  sponsored: withPhotoLookup(sponsoredSpot),
+})
 } catch (error) {
   res.status(500).json({ error: error.message })
 }
@@ -393,7 +400,7 @@ router.get('/:id', async (req, res) => {
     const amenities = await getAmenities(spot)
 
     return res.json({
-      ...spot,
+      ...withPhotoLookup(spot),
       attributes,
       verification_tier,
       amenities,

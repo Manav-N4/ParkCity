@@ -1,6 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
+const { withPhotoLookup } = require('../lib/spotPhotos')
 
 router.post('/toggle', async (req, res) => {
   try {
@@ -69,7 +70,7 @@ router.get('/', async (req, res) => {
       throw new Error('Something went wrong')
     }
 
-    return res.json(spots || [])
+    return res.json((spots || []).map(withPhotoLookup))
   } catch (error) {
     console.error('saved spots fetch error:', error)
     return res.status(500).json({ error: error.message })

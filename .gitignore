@@ -44,3 +44,5 @@ yarn-error.*
 *.apk
 .env
 supabase/.temp
+
+design_reference/
