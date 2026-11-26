@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const supabase = require('../supabase')
-const { fetchFreshSpotPhoto } = require('../lib/spotPhotos')
+const { fetchStreetViewPhoto, streetViewConfig } = require('../lib/spotPhotos')
 const {
   createRateLimiter,
   createConcurrencyGate,
@@ -22,7 +22,7 @@ const dailyBudget = createDailyBudget(
 )
 
 // GET /spot-photo/:spotId?w=400|800
-// Returns a fresh Google photo for the spot as JSON. Nothing is cached:
+// Returns a Street View photo for the spot as JSON. Nothing is cached:
 // the response is no-store and the backend keeps no photo data.
 router.get('/:spotId', async (req, res) => {
   res.set('Cache-Control', 'no-store')
@@ -37,15 +37,18 @@ router.get('/:spotId', async (req, res) => {
     return res.status(400).json({ error: 'w must be 400 or 800', code: 'VALIDATION_ERROR' })
   }
 
+  // Requires a dedicated Street View key and URL signing secret; no fallback.
+  if (!streetViewConfig()) {
+    return res.status(503).json({ error: 'Photos are not configured', code: 'PHOTO_NOT_CONFIGURED' })
+  }
+
   if (!perUserLimit(req.user.id)) {
     return res.status(429).json({ error: 'Too many photo requests', code: 'RATE_LIMITED' })
   }
 
   try {
     const { data: spot, error } = await supabase
-      .from('parking_spots')
-      .select('id, google_place_id')
-      .eq('id', spotId)
+      .rpc('get_parking_spot_detail', { spot_uuid: spotId })
       .maybeSingle()
 
     if (error) {
@@ -57,7 +60,7 @@ router.get('/:spotId', async (req, res) => {
       return res.status(404).json({ error: 'Parking spot not found', code: 'NOT_FOUND' })
     }
 
-    if (!spot.google_place_id) {
+    if (typeof spot.lat !== 'number' || typeof spot.lng !== 'number') {
       return res.json({ photo: null })
     }
 
@@ -67,7 +70,7 @@ router.get('/:spotId', async (req, res) => {
 
     let photo
     try {
-      photo = await fetchFreshSpotPhoto(spot.google_place_id, width, () =>
+      photo = await fetchStreetViewPhoto(spot.lat, spot.lng, width, () =>
         dailyBudget.tryConsume(),
       )
     } finally {
@@ -76,7 +79,7 @@ router.get('/:spotId', async (req, res) => {
 
     return res.json({ photo })
   } catch (error) {
-    if (error.code === 'PHOTO_BUDGET_EXCEEDED') {
+    if (error.code === 'PHOTO_BUDGET_EXCEEDED' || error.code === 'PHOTO_NOT_CONFIGURED') {
       return res.status(503).json({ error: error.message, code: error.code })
     }
     if (error.code === 'PHOTO_UPSTREAM_ERROR') {
